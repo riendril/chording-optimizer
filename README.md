@@ -90,6 +90,7 @@ The implementation tracks:
 ## Configuration Parameters
 
 ```python
+FILENAME
 MAX_CHARS = 5            # Maximum chord length
 MIN_CHARS = 2            # Minimum chord length
 FALLBACK_PENALTY = 1.5   # Penalty for fallback assignments
@@ -135,4 +136,3 @@ python chords_generator.py
 ```
 
 The program will process the input corpus and generate optimized chord assignments for all words, with special handling for single-character words.
-

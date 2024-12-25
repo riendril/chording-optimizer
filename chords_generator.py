@@ -9,7 +9,6 @@ from itertools import combinations
 from typing import Dict, List, Set, Tuple
 
 # Configuration constants
-FILENAME = "MonkeyType_english_10k.json"
 MAX_CHARS = 5
 WEIGHT_FIRST_LAST_CHAR = 0.3
 WEIGHT_NO_DIFFERENT_CHARS = 0.4
@@ -264,7 +263,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "filename",
         nargs="?",  # Makes the argument optional
-        default="default_filename.json",  # Set a default value
+        default="corpus.json",  # Set a default value
         help="Path to the JSON file to be processed",
     )
 
