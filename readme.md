@@ -1,77 +1,112 @@
 # Optimized Chord Generator
 
-This project implements an optimized solution for generating chord combinations for text input, taking into account word frequency distributions following Zipf's law. The goal is to minimize the average effort required for text input by assigning shorter chord combinations to more frequently used words.
+This project implements an optimized solution for generating chord combinations for text input, taking into account word frequency distributions following Zipf's law. The goal is to minimize the average effort required for text input by assigning shorter chord combinations to more frequently used words while adhering to specific optimization constraints.
 
-## The Optimization Problem
+## Goal in Detail
 
-### Problem Statement
+1. Minimize the total weighted cost: $\sum_{i=1}^n f(i) * |c(w_i)|$
+   where:
 
-Given:
-- A set of words W = {w₁, w₂, ..., wₙ} ordered by frequency
-- Frequencies following Zipf's law: f(k) = 1/(k * ln(1.78 + n))
-- Constraints on valid chord assignments
+   - $f(i)$ is the frequency of word $i$
+   - $|c(w_i)|$ is the length of the chord assigned to word $i$
 
-Goal:
-Minimize the total weighted cost: Σᵢ f(i) * |c(wᵢ)|
-where |c(wᵢ)| is the length of the chord assigned to word wᵢ
+2. Adhere to the following rules:
 
-### Constraints
+   - No chord with more than MAX_CHARS characters: $\forall c \in C: |c| \leq \text{MAX\_CHARS}$
 
-1. Each chord must be 2-5 characters long
-2. Chord characters must be present in the word they represent
-3. Each chord must be unique
-4. Each word gets at most one chord assignment
+3. Balance between the following optimization goals (with weights):
 
-### Why This Approach Works
+   - First and last character preference: $w_{\text{fl}} * \sum_{i=1}^n \text{has\_first\_last}(c_i, w_i)$
+   - Character similarity: $w_{\text{sim}} * \sum_{i=1}^n \text{different\_chars}(c_i, w_i)$
 
-Our solution employs a greedy approach with frequency weighting, which provides a good approximation of the optimal solution because:
+   where:
 
-1. **Monotonic Frequency Distribution**: 
-   - Zipf's law ensures that word frequencies decrease monotonically
-   - This property makes greedy assignment effective
+   - $w_{\text{fl}} = \text{WEIGHT\_FIRST\_LAST\_CHAR}$
+   - $w_{\text{sim}} = \text{WEIGHT\_NO\_DIFFERENT\_CHARS}$
 
-2. **Local Optimality**:
-   - Assigning shortest available chords to most frequent words
-   - Weighted cost consideration prevents myopic decisions
+## Mathematical Foundation
 
-3. **Bounded Approximation**:
-   - We can calculate a theoretical lower bound
-   - The approximation ratio helps evaluate solution quality
+### Zipf's Distribution
+
+For a vocabulary of size $N$, the Zipf distribution assigns to the element of rank $k$ the probability:
+
+$f(k;N) = \begin{cases}
+    \frac{1}{H_N} \frac{1}{k}, & \text{if } 1 \leq k \leq N \\
+    0, & \text{if } k < 1 \text{ or } N < k
+\end{cases}$
+
+where $H_N$ is the Nth harmonic number:
+
+$H_N = \sum_{k=1}^N \frac{1}{k}$
+
+### Optimization Problem
+
+The complete optimization problem can be formulated as:
+
+Minimize:
+$\sum_{i=1}^n \left(\frac{|c(w_i)|}{i H_n}\right) - w_{\text{fl}} * B_{\text{fl}}(w_i, c_i) + w_{\text{sim}} * D(w_i, c_i)$
+
+where:
+
+- $B_{\text{fl}}(w_i, c_i)$ is the bonus for including first/last characters
+- $D(w_i, c_i)$ is the penalty for different characters
+
+Subject to:
+
+1. $\forall i: 2 \leq |c(w_i)| \leq \text{MAX\_CHARS}$
+2. $\forall i,j: i \neq j \implies c(w_i) \neq c(w_j)$
+3. $\forall i: c(w_i) \subseteq \text{chars}(w_i)$
 
 ## Implementation Details
 
-The algorithm uses several optimization techniques:
+### Cost Function
 
-1. **Weighted Combination Generation**:
-   ```python
-   def get_weighted_combinations(word: str, rank: int) -> List[Tuple[str, float]]:
-       combos = get_valid_combinations(word)
-       weight = get_word_weight(rank)
-       return [(combo, len(combo) * weight) for combo in combos]
-   ```
+The total cost for a chord assignment is calculated as:
 
-2. **Cost Calculation**:
-   ```python
-   def calculate_total_cost(assignments: Dict[str, str], words: List[str]) -> float:
-       return sum(get_word_weight(rank) * len(chord) 
-                 for rank, (word, chord) in enumerate(assignments.items()) 
-                 if chord != "EMPTY")
-   ```
+```python
+def calculate_total_cost(assignments: Dict[str, str], words: List[str]) -> float:
+    return sum(
+        (len(chord) / (i + 1) / harmonic(len(words))) -
+        (WEIGHT_FIRST_LAST_CHAR * has_first_last_bonus(word, chord)) +
+        (WEIGHT_NO_DIFFERENT_CHARS * different_chars_penalty(word, chord))
+        for i, (word, chord) in enumerate(assignments.items())
+        if chord != "EMPTY"
+    )
+```
 
-3. **Approximation Bounds**:
-   - Lower bound: Σᵢ 2 * f(i) (minimum possible chord length * frequency)
-   - Actual/Lower Bound ratio indicates solution quality
+### Optimization Weights
 
-## Performance Metrics
+The balance between different optimization goals is controlled by:
 
-The implementation tracks several key metrics:
+```python
+WEIGHT_FIRST_LAST_CHAR = 0.3  # Bonus for including first/last chars
+WEIGHT_NO_DIFFERENT_CHARS = 0.5  # Penalty for different chars
+```
 
-1. Total Weighted Cost
-2. Approximation Ratio
-3. Number of Unassigned Words
-4. Average Chord Length
+### Performance Metrics
 
-These metrics help evaluate the effectiveness of the optimization and identify potential improvements.
+The implementation tracks:
+
+1. Total Weighted Cost: $C_{\text{total}} = \sum_{i} \text{cost}(w_i, c_i)$
+2. Approximation Ratio: $\frac{C_{\text{total}}}{C_{\text{lower}}}$
+3. Character Similarity Score: $\frac{1}{n}\sum_{i} \text{similarity}(w_i, c_i)$
+4. First/Last Character Usage: $\frac{|\{i: \text{has\_first\_last}(w_i, c_i)\}|}{n}$
+
+## Theoretical Bounds
+
+### Lower Bound
+
+The theoretical lower bound for the total cost is:
+
+$C_{\text{lower}} = \sum_{i=1}^n \frac{2}{i H_n}$
+
+where 2 is the minimum chord length.
+
+### Upper Bound
+
+The worst-case upper bound is:
+
+$C_{\text{upper}} = \sum_{i=1}^n \frac{\text{MAX\_CHARS}}{i H_n}$
 
 ## Usage
 
@@ -79,32 +114,33 @@ These metrics help evaluate the effectiveness of the optimization and identify p
 python chord_generator.py
 ```
 
-The program will:
-1. Read the input word list (sorted by frequency)
-2. Generate optimized chord assignments
-3. Output results with optimization metrics
-4. Save assignments to a new JSON file
+Configuration parameters can be adjusted in the code:
 
-## Mathematical Proof Sketch
+```python
+MAX_CHARS = 5
+WEIGHT_FIRST_LAST_CHAR = 0.3
+WEIGHT_NO_DIFFERENT_CHARS = 0.5
+```
 
-For a given set of n words, the optimal solution must satisfy:
+## Output Format
 
-1. **Lower Bound**: Cost ≥ Σᵢ₌₁ⁿ 2/i * ln(1.78 + i)
-   - No chord can be shorter than 2 characters
+The program generates a JSON file with:
 
-2. **Greedy Choice Property**:
-   - If w₁ is the most frequent word, assigning it the shortest available chord is optimal
-   - Proof by contradiction: swapping a longer chord would increase total cost
+1. Chord assignments
+2. Optimization metrics
+3. Performance statistics
 
-3. **Approximation Guarantee**:
-   - The ratio between our solution and the optimal solution is bounded
-   - Bound depends on the harmonic number of vocabulary size
+Example:
 
-## Future Improvements
-
-Potential areas for enhancement:
-
-1. Consider ergonomic factors in chord selection
-2. Implement dynamic programming for small subsets
-3. Add parallel processing for large vocabularies
-4. Include user-defined constraints
+```json
+{
+    "name": "optimized_chords",
+    "optimizationMetrics": {
+        "totalCost": 245.67,
+        "approximationRatio": 1.23,
+        "characterSimilarity": 0.89,
+        "firstLastUsage": 0.76
+    },
+    "chords": [...]
+}
+```
