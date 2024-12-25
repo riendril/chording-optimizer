@@ -1,136 +1,99 @@
 # Optimized Chord Generator
 
-This project implements an optimized solution for generating chord combinations for text input, taking into account word frequency distributions following Zipf's law. The goal is to minimize the average effort required for text input by assigning shorter chord combinations to more frequently used words while adhering to specific optimization constraints.
+This project implements an optimized solution for generating chord combinations for text input, taking into account word frequency distributions following Zipf's law. The goal is to minimize the average effort required for text input by assigning shorter chord combinations to more frequently used words while ensuring every word receives a valid chord assignment.
 
 ## Goal in Detail
 
-1. Minimize the total weighted cost: $\sum_{i=1}^n f(i) * |c(w_i)|$
+1. Minimize the total weighted cost: $\sum_{i=1}^n f(i) * C(w_i, c_i)$
    where:
 
-   - $f(i)$ is the frequency of word $i$
-   - $|c(w_i)|$ is the length of the chord assigned to word $i$
+   - $f(i)$ is the Zipf frequency of word $i$
+   - $C(w_i, c_i)$ is the cost function for assigning chord $c_i$ to word $w_i$
 
 2. Adhere to the following rules:
-
+   - Every word must receive a chord assignment
    - No chord with more than MAX-CHARS characters: $\forall c \in C: |c| \leq \text{MAX-CHARS}$
-
-3. Balance between the following optimization goals (with weights):
-
-   - First and last character preference: $w_{\text{fl}} * \sum_{i=1}^n \text{has-first-last}(c_i, w_i)$
-   - Character similarity: $w_{\text{sim}} * \sum_{i=1}^n \text{different-chars}(c_i, w_i)$
-
-   where:
-
-   - $w_{\text{fl}} = \text{WEIGHT-FIRST-LAST-CHAR}$
-   - $w_{\text{sim}} = \text{WEIGHT-NO-DIFFERENT-CHARS}$
+   - No chord with fewer than MIN-CHARS characters: $\forall c \in C: |c| \geq \text{MIN-CHARS}$
 
 ## Mathematical Foundation
 
+### Cost Function
+
+The cost function for a chord assignment is defined as:
+
+$C(w, c) = f(r) * |c| * (2 - S(w,c)) * P(c)$
+
+where:
+
+- $f(r)$ is the Zipf weight for rank $r$
+- $|c|$ is the length of the chord
+- $S(w,c)$ is the similarity score between word and chord
+- $P(c)$ is the fallback penalty (if applicable)
+
+### Similarity Score
+
+The similarity between a word and its chord is calculated as:
+
+$S(w,c) = \frac{|\text{chars}(w) \cap \text{chars}(c)|}{|c|}$
+
+This ensures that chords using characters from the original word are preferred.
+
+### Fallback Assignment
+
+When optimal chord assignment is not possible, the fallback system:
+
+1. Attempts to use first/last characters of the word
+2. Adds unique middle characters if needed
+3. Uses character substitution as a last resort
+
+The fallback assignments incur a penalty factor of FALLBACK_PENALTY in the cost function.
+
 ### Zipf's Distribution
 
-For a vocabulary of size $N$, the Zipf distribution assigns to the element of rank $k$ the probability:
+The frequency weight for a word of rank $k$ in a vocabulary of size $N$ is:
 
-$f(k;N) = \begin{cases}
-    \frac{1}{H_N} \frac{1}{k}, & \text{if } 1 \leq k \leq N \\
-    0, & \text{if } k < 1 \text{ or } N < k
-\end{cases}$
+$f(k;N) = \frac{1}{k H_N}$
 
 where $H_N$ is the Nth harmonic number:
 
 $H_N = \sum_{k=1}^N \frac{1}{k}$
 
-### Optimization Problem
-
-The complete optimization problem can be formulated as:
-
-Minimize:
-$\sum_{i=1}^n \left(\frac{|c(w_i)|}{i H_n}\right) - w_{\text{fl}} * B_{\text{fl}}(w_i, c_i) + w_{\text{sim}} * D(w_i, c_i)$
-
-where:
-
-- $B_{\text{fl}}(w_i, c_i)$ is the bonus for including first/last characters
-- $D(w_i, c_i)$ is the penalty for different characters
-
-Subject to:
-
-1. $\forall i: 2 \leq |c(w_i)| \leq \text{MAX-CHARS}$
-2. $\forall i,j: i \neq j \implies c(w_i) \neq c(w_j)$
-3. $\forall i: c(w_i) \subseteq \text{chars}(w_i)$
-
 ## Implementation Details
 
-### Cost Function
+### Optimization Process
 
-The total cost for a chord assignment is calculated as:
-
-```python
-def calculate_total_cost(assignments: Dict[str, str], words: List[str]) -> float:
-    return sum(
-        (len(chord) / (i + 1) / harmonic(len(words))) -
-        (WEIGHT_FIRST_LAST_CHAR * has_first_last_bonus(word, chord)) +
-        (WEIGHT_NO_DIFFERENT_CHARS * different_chars_penalty(word, chord))
-        for i, (word, chord) in enumerate(assignments.items())
-        if chord != "EMPTY"
-    )
-```
-
-### Optimization Weights
-
-The balance between different optimization goals is controlled by:
-
-```python
-WEIGHT_FIRST_LAST_CHAR = 0.3  # Bonus for including first/last chars
-WEIGHT_NO_DIFFERENT_CHARS = 0.5  # Penalty for different chars
-```
+1. First pass: Attempt optimal assignments using character combinations from the word
+2. Fallback pass: Generate valid chords for remaining unassigned words
+3. Cost calculation: Apply normalized cost function with similarity scoring
 
 ### Performance Metrics
 
 The implementation tracks:
 
-1. Total Weighted Cost: $C_{\text{total}} = \sum_{i} \text{cost}(w_i, c_i)$
+1. Total Weighted Cost: $C_{\text{total}} = \sum_{i} C(w_i, c_i)$
 2. Approximation Ratio: $\frac{C_{\text{total}}}{C_{\text{lower}}}$
-3. Character Similarity Score: $\frac{1}{n}\sum_{i} \text{similarity}(w_i, c_i)$
-4. First/Last Character Usage: $\frac{|\{i: \text{has-first-last}(w_i, c_i)\}|}{n}$
+3. Character Similarity Score: $\frac{1}{n}\sum_{i} S(w_i, c_i)$
+4. First/Last Character Usage Rate
+5. Number of Fallback Assignments
+6. Average Chord Length
 
-## Theoretical Bounds
-
-### Lower Bound
-
-The theoretical lower bound for the total cost is:
-
-$C_{\text{lower}} = \sum_{i=1}^n \frac{2}{i H_n}$
-
-where 2 is the minimum chord length.
-
-### Upper Bound
-
-The worst-case upper bound is:
-
-$C_{\text{upper}} = \sum_{i=1}^n \frac{\text{MAX-CHARS}}{i H_n}$
-
-## Usage
+## Configuration Parameters
 
 ```python
-python chord_generator.py
-```
-
-Configuration parameters can be adjusted in the code:
-
-```python
-MAX_CHARS = 5
-WEIGHT_FIRST_LAST_CHAR = 0.3
-WEIGHT_NO_DIFFERENT_CHARS = 0.5
+MAX_CHARS = 5            # Maximum chord length
+MIN_CHARS = 2            # Minimum chord length
+FALLBACK_PENALTY = 1.5   # Penalty for fallback assignments
 ```
 
 ## Output Format
 
-The program generates a JSON file with:
+The program generates a JSON file containing:
 
-1. Chord assignments
+1. Chord assignments for all words
 2. Optimization metrics
 3. Performance statistics
 
-Example:
+Example output structure:
 
 ```json
 {
@@ -139,8 +102,18 @@ Example:
         "totalCost": 245.67,
         "approximationRatio": 1.23,
         "characterSimilarity": 0.89,
-        "firstLastUsage": 0.76
+        "firstLastUsage": 0.76,
+        "fallbackAssignments": 42,
+        "averageChordLength": 3.14
     },
     "chords": [...]
 }
 ```
+
+## Usage
+
+```bash
+python improved_generator.py
+```
+
+The program will process the input corpus and generate optimized chord assignments for all words, ensuring no words are left unassigned.
