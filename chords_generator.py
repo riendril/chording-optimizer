@@ -4,6 +4,7 @@ Improved chord generator with single character word handling.
 
 import argparse
 import json
+import sys
 from dataclasses import dataclass
 from itertools import combinations
 from typing import Dict, List, Set, Tuple
@@ -217,8 +218,11 @@ def assign_chords(words: List[str]) -> Tuple[Dict[str, str], OptimizationMetrics
 
 def process_corpus_json(input_file_name: str):
     """Process corpus and generate optimized chord assignments"""
-    with open(input_file_name, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    with open(input_file_name, "r", encoding="utf-8") as file:
+        data = json.load(file)
+
+    if data.get("orderedByFrequency") is False:
+        sys.exit("Aborted: list not ordered by frequency")
 
     words = data.get("words", [])  # Safely get words list
     assignments, metrics = assign_chords(words)
@@ -254,8 +258,8 @@ def process_corpus_json(input_file_name: str):
         ],
     }
 
-    with open("OptimizedChordsFor_" + input_file_name, "w", encoding="utf-8") as f:
-        json.dump(output_data, f, indent=2)
+    with open("OptimizedChordsFor_" + input_file_name, "w", encoding="utf-8") as file:
+        json.dump(output_data, file, indent=2)
 
 
 if __name__ == "__main__":
