@@ -1,4 +1,4 @@
-# Optimized Chord Generator
+# Zipf Chords Generator
 
 This project implements an optimized solution for generating chord combinations for text input, taking into account word frequency distributions following Zipf's law. The goal is to minimize the average effort required for text input by assigning shorter chord combinations to more frequently used words.
 
