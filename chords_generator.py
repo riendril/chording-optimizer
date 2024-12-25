@@ -1,5 +1,5 @@
 """
-Improved chord generator with guaranteed assignments and normalized cost function.
+Improved chord generator with single character word handling.
 """
 
 import json
@@ -25,6 +25,7 @@ class OptimizationMetrics:
     first_last_usage: float
     fallback_assignments: int
     average_chord_length: float
+    single_char_words: int
 
 
 def calculate_harmonic_number(n: int) -> float:
@@ -95,7 +96,10 @@ def calculate_assignment_cost(
 ) -> float:
     """Calculate normalized cost for a chord assignment"""
     weight = get_word_weight(rank, total_words)
-    base_cost = len(chord) * weight
+    base_cost = len(chord) * weight if chord else 0  # No cost for single-char words
+
+    if not chord:  # Single character word
+        return 0
 
     # Normalize similarity to [0, 1]
     sim_score = similarity_score(word, chord)
@@ -113,17 +117,36 @@ def assign_chords(words: List[str]) -> Tuple[Dict[str, str], OptimizationMetrics
     assignments: Dict[str, str] = {}
     fallback_count: int = 0
     total_length: int = 0
+    single_char_count: int = 0
+    words_with_chords: int = 0  # Count of words that actually get chords
+
+    # Create word to rank mapping
+    word_ranks = {word: idx for idx, word in enumerate(words)}
+
     total_words = len(words)
 
-    # First pass: optimal assignments
-    for rank, word in enumerate(words):
+    # First handle single character words
+    for word in words:
+        if len(word) == 1:
+            assignments[word] = ""  # Empty string indicates no chord needed
+            single_char_count += 1
+            continue
+
+        # First pass: optimal assignments
         valid_combos = get_valid_combinations(word, used_chords)
         assigned = False
 
         if valid_combos:
             # Find combo with minimum cost
+            # Create word to rank mapping at the start
+            word_ranks = {word: idx for idx, word in enumerate(words)}
             costs = [
-                (calculate_assignment_cost(word, combo, rank, total_words), combo)
+                (
+                    calculate_assignment_cost(
+                        word, combo, word_ranks[word], total_words
+                    ),
+                    combo,
+                )
                 for combo in valid_combos
             ]
             cost, best_combo = min(costs)
@@ -131,6 +154,7 @@ def assign_chords(words: List[str]) -> Tuple[Dict[str, str], OptimizationMetrics
             assignments[word] = best_combo
             used_chords.add(best_combo)
             total_length += len(best_combo)
+            words_with_chords += 1
             assigned = True
 
         if not assigned:
@@ -141,31 +165,50 @@ def assign_chords(words: List[str]) -> Tuple[Dict[str, str], OptimizationMetrics
                 used_chords.add(fallback)
                 total_length += len(fallback)
                 fallback_count += 1
+                words_with_chords += 1
 
     # Calculate metrics
     total_cost = sum(
         calculate_assignment_cost(
-            word, chord, rank, total_words, chord == assignments[word]
+            word,
+            chord,
+            word_ranks[word],
+            total_words,
+            bool(chord) and assignments[word] == chord,
         )
-        for rank, (word, chord) in enumerate(assignments.items())
+        for word, chord in assignments.items()
     )
 
-    # Calculate theoretical lower bound (all words with minimum length chords)
+    # Calculate theoretical lower bound (all words with minimum length chords, except single char words)
     lower_bound = sum(
-        MIN_CHARS * get_word_weight(rank, total_words) for rank in range(total_words)
+        MIN_CHARS * get_word_weight(rank, total_words)
+        for rank, word in enumerate(words)
+        if len(word) > 1
     )
+
+    # Only count similarity and first/last usage for words that actually get chords
+    words_with_actual_chords = [(w, c) for w, c in assignments.items() if c]
 
     metrics = OptimizationMetrics(
         total_cost=total_cost,
-        approximation_ratio=total_cost / lower_bound,
-        character_similarity=sum(similarity_score(w, c) for w, c in assignments.items())
-        / len(words),
-        first_last_usage=sum(
-            1 for w, c in assignments.items() if w[0] in c or w[-1] in c
-        )
-        / len(words),
+        approximation_ratio=total_cost / lower_bound if lower_bound > 0 else 1.0,
+        character_similarity=(
+            sum(similarity_score(w, c) for w, c in words_with_actual_chords)
+            / len(words_with_actual_chords)
+            if words_with_actual_chords
+            else 1.0
+        ),
+        first_last_usage=(
+            sum(1 for w, c in words_with_actual_chords if w[0] in c or w[-1] in c)
+            / len(words_with_actual_chords)
+            if words_with_actual_chords
+            else 1.0
+        ),
         fallback_assignments=fallback_count,
-        average_chord_length=total_length / len(words),
+        average_chord_length=(
+            total_length / words_with_chords if words_with_chords > 0 else 0
+        ),
+        single_char_words=single_char_count,
     )
 
     return assignments, metrics
@@ -176,7 +219,7 @@ def process_corpus_json(input_file_name: str):
     with open(input_file_name, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    words = data["words"]
+    words = data.get("words", [])  # Safely get words list
     assignments, metrics = assign_chords(words)
 
     print("\nOptimization Metrics:")
@@ -186,10 +229,11 @@ def process_corpus_json(input_file_name: str):
     print(f"First/Last Usage: {metrics.first_last_usage:.4f}")
     print(f"Fallback Assignments: {metrics.fallback_assignments}")
     print(f"Average Chord Length: {metrics.average_chord_length:.2f}")
+    print(f"Single Character Words: {metrics.single_char_words}")
 
     output_data = {
-        "name": "optimized_chords_for_" + data["name"],
-        "orderedByFrequency": data["orderedByFrequency"],
+        "name": "optimized_chords_for_" + data.get("name", "unknown"),
+        "orderedByFrequency": data.get("orderedByFrequency", True),
         "optimizationMetrics": {
             "totalCost": metrics.total_cost,
             "approximationRatio": metrics.approximation_ratio,
@@ -197,8 +241,16 @@ def process_corpus_json(input_file_name: str):
             "firstLastUsage": metrics.first_last_usage,
             "fallbackAssignments": metrics.fallback_assignments,
             "averageChordLength": metrics.average_chord_length,
+            "singleCharWords": metrics.single_char_words,
         },
-        "chords": [assignments[word] + " -> " + word for word in words],
+        "chords": [
+            (
+                (word + " -> " + assignments[word])
+                if word in assignments and assignments[word]
+                else word
+            )
+            for word in words
+        ],
     }
 
     with open("OptimizedChordsFor_" + input_file_name, "w", encoding="utf-8") as f:
