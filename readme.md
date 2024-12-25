@@ -12,17 +12,17 @@ This project implements an optimized solution for generating chord combinations 
 
 2. Adhere to the following rules:
 
-   - No chord with more than MAX_CHARS characters: $\forall c \in C: |c| \leq \text{MAX\_CHARS}$
+   - No chord with more than MAX-CHARS characters: $\forall c \in C: |c| \leq \text{MAX-CHARS}$
 
 3. Balance between the following optimization goals (with weights):
 
-   - First and last character preference: $w_{\text{fl}} * \sum_{i=1}^n \text{has\_first\_last}(c_i, w_i)$
-   - Character similarity: $w_{\text{sim}} * \sum_{i=1}^n \text{different\_chars}(c_i, w_i)$
+   - First and last character preference: $w_{\text{fl}} * \sum_{i=1}^n \text{has-first-last}(c_i, w_i)$
+   - Character similarity: $w_{\text{sim}} * \sum_{i=1}^n \text{different-chars}(c_i, w_i)$
 
    where:
 
-   - $w_{\text{fl}} = \text{WEIGHT\_FIRST\_LAST\_CHAR}$
-   - $w_{\text{sim}} = \text{WEIGHT\_NO\_DIFFERENT\_CHARS}$
+   - $w_{\text{fl}} = \text{WEIGHT-FIRST-LAST-CHAR}$
+   - $w_{\text{sim}} = \text{WEIGHT-NO-DIFFERENT-CHARS}$
 
 ## Mathematical Foundation
 
@@ -53,7 +53,7 @@ where:
 
 Subject to:
 
-1. $\forall i: 2 \leq |c(w_i)| \leq \text{MAX\_CHARS}$
+1. $\forall i: 2 \leq |c(w_i)| \leq \text{MAX-CHARS}$
 2. $\forall i,j: i \neq j \implies c(w_i) \neq c(w_j)$
 3. $\forall i: c(w_i) \subseteq \text{chars}(w_i)$
 
@@ -90,7 +90,7 @@ The implementation tracks:
 1. Total Weighted Cost: $C_{\text{total}} = \sum_{i} \text{cost}(w_i, c_i)$
 2. Approximation Ratio: $\frac{C_{\text{total}}}{C_{\text{lower}}}$
 3. Character Similarity Score: $\frac{1}{n}\sum_{i} \text{similarity}(w_i, c_i)$
-4. First/Last Character Usage: $\frac{|\{i: \text{has\_first\_last}(w_i, c_i)\}|}{n}$
+4. First/Last Character Usage: $\frac{|\{i: \text{has-first-last}(w_i, c_i)\}|}{n}$
 
 ## Theoretical Bounds
 
@@ -106,7 +106,7 @@ where 2 is the minimum chord length.
 
 The worst-case upper bound is:
 
-$C_{\text{upper}} = \sum_{i=1}^n \frac{\text{MAX\_CHARS}}{i H_n}$
+$C_{\text{upper}} = \sum_{i=1}^n \frac{\text{MAX-CHARS}}{i H_n}$
 
 ## Usage
 
