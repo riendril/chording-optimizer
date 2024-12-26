@@ -11,10 +11,16 @@ This project implements an optimized solution for generating chord combinations 
    - $C(w_i, c_i)$ is the cost function for assigning chord $c_i$ to word $w_i$
 
 2. Adhere to the following rules:
+
+   - A chord may not contain the same character twice
    - Single-character words do not require chord assignments
    - Every multi-character word must receive a chord assignment
    - No chord with more than MAX-CHARS characters: $\forall c \in C: |c| \leq \text{MAX-CHARS}$
    - No chord with fewer than MIN-CHARS characters: $\forall c \in C: |c| \geq \text{MIN-CHARS}$
+
+3. Set some preferences with weight improvements:
+   - A chord contains the first character of a word
+   - A chord contains the last character of a word
 
 ## Mathematical Foundation
 
