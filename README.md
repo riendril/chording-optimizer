@@ -1,144 +1,111 @@
 # Zipf Chords Generator
 
-This project implements an optimized solution for generating chord combinations for text input, taking into account word frequency distributions following Zipf's law. The goal is to minimize the average effort required for text input by assigning shorter chord combinations to more frequently used words.
+This project implements an optimized solution for generating chord combinations for text input on (currently only ortholinear/matrix) keyboards, taking into account word frequency distributions following Zipf's law and key positions in the chosen keyboard layout.
 
-## Goal in Detail
+## Core Optimization Goals
 
 1. Minimize the total weighted cost: $\sum_{i=1}^n f(i) * C(w_i, c_i)$
    where:
-
    - $f(i)$ is the Zipf frequency of word $i$
    - $C(w_i, c_i)$ is the cost function for assigning chord $c_i$ to word $w_i$
 
-2. Adhere to the following rules:
+2. Optimize keyboard ergonomics:
+   - Avoid same-finger usage
+   - Minimize lateral stretches and scissor movements
+   - Prefer home row placement where feasible
 
-   - A chord may not contain the same character twice
-   - Single-character words do not require chord assignments
-   - Every multi-character word must receive a chord assignment
-   - No chord with more than MAX-CHARS characters: $\forall c \in C: |c| \leq \text{MAX-CHARS}$
-   - No chord with fewer than MIN-CHARS characters: $\forall c \in C: |c| \geq \text{MIN-CHARS}$
+3. Maintain core rules:
+   - No duplicate characters in chords
+   - Single-character words exempt from chord assignment
+   - Multi-character words must receive chord assignments
+   - Chord length bounds: MIN_LETTERS ≤ |c| ≤ MAX_LETTERS
 
-3. Set some preferences with weight improvements:
-   - A chord contains the first character of a word
-   - A chord contains the last character of a word
+## Keyboard Layout Considerations
 
-## Mathematical Foundation
+The generator is optimized for ortholinear keyboard layouts with the Canary layout as an example. Key aspects considered:
 
-### Cost Function
+1. Finger positioning:
+   - Each column maps to a specific finger
+   - Vertical movement costs increase with distance
+   - Adjacent key combinations
 
-The cost function for a chord assignment is defined as:
+2. Movement penalties:
+   - Same Finger Bigrams (SFB): Prohibited
+   - Lateral Stretch Bigrams (LSB): Low penalty
+   - Half Scissor Bigrams (HSB): Very low penalty
+   - Full Scissor Bigrams (FSB): Medium penalty
+   - Combined LSB+FSB: High penalty
 
-$$
-C(w, c) = \begin{cases}
-0 & \text{if } |w| = 1 \\
-f(r) * |c| * (2 - S(w,c)) * P(c) & \text{otherwise}
-\end{cases}
-$$
+## Cost Function Components
 
-where:
+The weighted cost function incorporates:
 
-- $f(r)$ is the Zipf weight for rank $r$
-- $|c|$ is the length of the chord
-- $S(w,c)$ is the similarity score between word and chord
-- $P(c)$ is the fallback penalty (if applicable)
+1. Base Metrics:
+   - Chord length (high weight)
+   - Fallback letter usage (high weight)
+   - Same finger utilization (medium weight)
 
-### Similarity Score
+2. Position Weights:
+   - First letter inclusion
+   - Second letter inclusion
+   - Last letter inclusion
 
-The similarity between a word and its chord is calculated as:
+3. Layout-Specific Factors:
+   - Finger travel distance
+   - Row positioning
+   - Hand alternation bonuses
 
-$S(w,c) = \frac{|\text{chars}(w) \cap \text{chars}(c)|}{|c|}$
+## Generation Algorithm
 
-This ensures that chords using characters from the original word are preferred.
+1. Initial Chord Generation:
+   - Generate all valid subset combinations from word letters
+   - Filter against already used chords
+   - Apply length constraints
 
-### Fallback Assignment System
+2. Fallback System:
+   - When no valid subset exists:
+     a. Identify most compatible additional letter based on layout
+     b. Generate new subset combinations
+     c. Recurse if needed
 
-When optimal chord assignment is not possible, the fallback system follows this hierarchy:
+3. Cost Evaluation:
+   - Apply weighted cost function to valid candidates
+   - Select optimal chord based on combined metrics
 
-1. Single-character words: No chord assigned
-2. Multi-character words:
-   a. Attempts to use first/last characters of the word
-   b. Adds unique middle characters if needed
-   c. Uses character substitution as a last resort
+## Configuration
 
-The fallback assignments incur a penalty factor of FALLBACK_PENALTY in the cost function.
+The system uses a config file (generator.config) for customization:
 
-### Zipf's Distribution
+```ini
+KEYLAYOUT_TYPE = ortholinear
+MAX_LETTERS = 6
+MIN_LETTERS = 2
 
-The frequency weight for a word of rank $k$ in a vocabulary of size $N$ is:
-
-$f(k;N) = \frac{1}{k H_N}$
-
-where $H_N$ is the Nth harmonic number:
-
-$H_N = \sum_{k=1}^N \frac{1}{k}$
-
-## Implementation Details
-
-### Optimization Process
-
-1. Initial pass: Identify single-character words (no chord needed)
-2. Main pass: Attempt optimal assignments using character combinations
-3. Fallback pass: Generate valid chords for remaining unassigned words
-4. Cost calculation: Apply normalized cost function with similarity scoring
-
-### Performance Metrics
-
-The implementation tracks:
-
-1. Total Weighted Cost: $C_{\text{total}} = \sum_{i} C(w_i, c_i)$
-2. Approximation Ratio: $\frac{C_{\text{total}}}{C_{\text{lower}}}$
-3. Character Similarity Score: $\frac{1}{n}\sum_{i} S(w_i, c_i)$
-4. First/Last Character Usage Rate
-5. Number of Fallback Assignments
-6. Average Chord Length
-7. Number of Single-Character Words
-
-## Configuration Parameters
-
-```python
-FILENAME
-MAX_CHARS = 5            # Maximum chord length
-MIN_CHARS = 2            # Minimum chord length
-FALLBACK_PENALTY = 1.5   # Penalty for fallback assignments
+# Cost Weights
+CHORD_LENGTH_WEIGHT = 1.8
+FALLBACK_PENALTY = 1.8
+FIRST_LETTER_WEIGHT = 1.5
+SECOND_LETTER_WEIGHT = 1.2
+LAST_LETTER_WEIGHT = 1.2
 ```
 
 ## Output Format
 
-The program generates a JSON file containing:
+The generator produces a JSON file containing:
 
-1. Chord assignments:
-   - Single-character words appear as-is
-   - Multi-character words appear as "word -> chord"
-2. Optimization metrics
-3. Performance statistics
-
-Example output structure:
-
-```json
-{
-  "name": "optimized_chords",
-  "optimizationMetrics": {
-    "totalCost": 245.67,
-    "approximationRatio": 1.23,
-    "characterSimilarity": 0.89,
-    "firstLastUsage": 0.76,
-    "fallbackAssignments": 42,
-    "averageChordLength": 3.14,
-    "singleCharWords": 5
-  },
-  "chords": [
-    "a", // Single-character word
-    "the -> th", // Multi-character word
-    "and -> ad" // Multi-character word
-    [...]
-  ]
-}
-```
+1. Chord assignments
+2. Optimization metrics:
+   - Total weighted cost
+   - Approximation ratio
+   - First/last letter usage rate
+   - Fallback assignment count
+   - Average chord length
+   - Single letter word count
 
 ## Usage
 
 ```bash
-python chords_generator.py
+python chords_generator.py [corpus_file] [--config path/to/config]
 ```
 
-The program will process the input corpus and generate optimized chord assignments for all words, with special handling for single-character words.
+The program processes the input corpus and generates optimized chord assignments considering both frequency distribution and keyboard ergonomics.
