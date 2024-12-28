@@ -1,0 +1,24 @@
+[project]
+name = "zipfChordsGenerator"
+dynamic = ["version"]
+version = "0.0.2"
+authors = [
+    { name = "Leonard Rienks / Ceredril", email = "63151691+Ceredril@users.noreply.github.com" },
+]
+description = "Generate optimized chords for a corpus following Zipf's law"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+    "Operating System :: Unix",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Ceredril/zipfChordsGenerator"
+Issues = "https://github.com/Ceredril/zipfChordsGenerator/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

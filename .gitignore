@@ -1,3 +1,13 @@
+# Artifacts
+data/input/
+data/output/
+
+# OS-specific files
+.DS_Store
+./.DS_Store
+*.DS_Store  # macOS
+*Thumbs.db  # Windows
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
