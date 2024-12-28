@@ -13,12 +13,42 @@ Output will be saved to data/output/assignmentCosts/analysis_{filename}.json
 
 import json
 from dataclasses import dataclass
+from enum import Enum, auto
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from src.get_parameters import GeneratorConfig
 
 
+# TODO: separate into something like a definitions module
+class FingerIndex(Enum):
+    """Enum for finger positions on keyboard"""
+
+    LPINKY = auto()
+    LRING = auto()
+    LMIDDLE = auto()
+    LINDEX = auto()
+    LTHUMB = auto()
+    RTHUMB = auto()
+    RINDEX = auto()
+    RMIDDLE = auto()
+    RRING = auto()
+    RPINKY = auto()
+
+
+# TODO: separate into something like a definitions module
+@dataclass
+class LetterData:
+    """Store relevant information about a letter position"""
+
+    finger: FingerIndex
+    vertical_distance_to_home_row: int
+    horizontal_distance_to_home_row: int
+    finger_to_left: Optional[FingerIndex]
+    finger_to_right: Optional[FingerIndex]
+
+
+# TODO: separate into something like a definitions module
 @dataclass
 class ChordMetrics:
     """Metrics for individual chord evaluation."""
@@ -29,6 +59,7 @@ class ChordMetrics:
     movement_combinations_score: float
 
 
+# TODO: separate into something like a definitions module
 @dataclass
 class AssignmentMetrics:
     """Metrics for word-chord assignment evaluation."""
@@ -41,6 +72,7 @@ class AssignmentMetrics:
     word_priority: float
 
 
+# TODO: separate into something like a definitions module
 @dataclass
 class GlobalMetrics:
     """Global metrics for entire assignment set."""
@@ -93,7 +125,14 @@ class ChordAnalyzer:
         with open(input_path, "r", encoding="utf-8") as f:
             assignments = json.load(f)
 
-        is_chord_assignment = "chordAssignments" in assignments
+        if "chordAssignments" in assignments:
+            is_chord_assignment = True
+        elif "wordAssignments" in assignments:
+            is_chord_assignment = False
+        else:
+            raise ValueError(
+                "Invalid assignment file format - missing required assignment type"
+            )
         metrics = self._calculate_metrics(assignments, is_chord_assignment)
 
         return {
@@ -105,7 +144,13 @@ class ChordAnalyzer:
         }
 
     def _calculate_metrics(self, assignments: Dict, is_chord_assignment: bool) -> Dict:
-        """Calculate all metrics for the assignment set."""
+        """Calculate all metrics for the assignment set.
+
+        Args:
+            assignments: Dictionary containing the assignments
+            is_chord_assignment: If True, contains word->chord mappings
+                               If False, contains chord->word mappings
+        """
         assignment_dict = assignments.get(
             "chordAssignments" if is_chord_assignment else "wordAssignments", {}
         )
@@ -113,13 +158,23 @@ class ChordAnalyzer:
         # Calculate individual metrics
         chord_metrics = {}
         assignment_metrics = {}
-        for word, chord in assignment_dict.items():
-            if chord is not None:
+
+        # Iterate through the assignments using more generic variable names
+        for key, value in assignment_dict.items():
+            if value is not None:
+                if is_chord_assignment:
+                    # key is word, value is chord
+                    word, chord = key, value
+                else:
+                    # key is chord, value is word
+                    chord, word = key, value
+
                 chord_metrics[chord] = self._calculate_chord_metrics(chord)
                 assignment_metrics[word] = self._calculate_assignment_metrics(
                     word, chord
                 )
 
+        # TODO: make work with word / chord assignments
         # Calculate global metrics
         global_metrics = self._calculate_global_metrics(assignment_dict)
 
@@ -132,6 +187,8 @@ class ChordAnalyzer:
             ),
         }
 
+    # TODO: make use of different data structures
+    # TODO: Change calculation
     def _calculate_chord_metrics(self, chord: str) -> ChordMetrics:
         """Calculate metrics for a single chord."""
         return ChordMetrics(
@@ -163,20 +220,172 @@ class ChordAnalyzer:
             sequence_difficulty=self._calculate_sequence_difficulty(assignments),
         )
 
+    def _load_keyboard_layout(self, layout_file: Path) -> Dict[str, LetterData]:
+        """Load keyboard layout from CSV file.
+
+        Args:
+            layout_file: Path to the CSV layout file
+
+        Returns:
+            Dictionary mapping letters to their keyboard position data
+        """
+        # TODO: separate into something like a definitions module
+        mapping = {}
+        finger_mapping = {
+            "lp": FingerIndex.LPINKY,
+            "lr": FingerIndex.LRING,
+            "lm": FingerIndex.LMIDDLE,
+            "li": FingerIndex.LINDEX,
+            "ri": FingerIndex.RINDEX,
+            "rm": FingerIndex.RMIDDLE,
+            "rr": FingerIndex.RRING,
+            "rp": FingerIndex.RPINKY,
+        }
+
+        with open(layout_file, encoding="utf-8") as file:
+            rows = [line.strip().split(",") for line in file]
+            layout_rows = rows[:3]
+            finger_map_rows = rows[3:6]
+            vertical_map_rows = rows[6:9]
+            horizontal_map_rows = rows[9:12]
+
+            # TODO: add support for other layouts from algorithm1
+            no_left_fingers = {FingerIndex.LPINKY, FingerIndex.RINDEX}
+            no_right_fingers = {FingerIndex.RPINKY, FingerIndex.LINDEX}
+
+            for row_idx, row in enumerate(layout_rows):
+                for col_idx, letter in enumerate(row):
+                    if letter == "-":
+                        continue
+                    current_finger = finger_mapping[finger_map_rows[row_idx][col_idx]]
+                    mapping[letter] = LetterData(
+                        current_finger,
+                        int(vertical_map_rows[row_idx][col_idx]),
+                        int(horizontal_map_rows[row_idx][col_idx]),
+                        (
+                            None
+                            if current_finger in no_left_fingers
+                            else finger_mapping[finger_map_rows[row_idx][col_idx - 1]]
+                        ),
+                        (
+                            None
+                            if current_finger in no_right_fingers
+                            else finger_mapping[finger_map_rows[row_idx][col_idx + 1]]
+                        ),
+                    )
+        return mapping
+
     def _calculate_home_row_deviation(self, chord: str) -> float:
         """Calculate deviation from home row position."""
-        # Implementation would depend on your keyboard layout
-        return 0.0  # Placeholder
+        if not hasattr(self, "keyboard_layout"):
+            self.keyboard_layout = self._load_keyboard_layout(
+                Path(self.config.keylayout_csv_file)
+            )
+
+        total_deviation = 0.0
+        for letter in chord:
+            if letter in self.keyboard_layout:
+                letter_data = self.keyboard_layout[letter]
+                total_deviation += abs(letter_data.vertical_distance_to_home_row)
+                total_deviation += abs(letter_data.horizontal_distance_to_home_row)
+
+        return total_deviation / len(chord) if chord else 0.0
 
     def _calculate_stretch_pinch_score(self, chord: str) -> float:
         """Calculate score for stretches and pinches in chord."""
-        # Implementation would depend on your keyboard layout
-        return 0.0  # Placeholder
+        if not hasattr(self, "keyboard_layout"):
+            self.keyboard_layout = self._load_keyboard_layout(
+                Path(self.config.keylayout_csv_file)
+            )
+
+        score = 0.0
+        chord_letters = [
+            self.keyboard_layout[c] for c in chord if c in self.keyboard_layout
+        ]
+
+        for i, curr in enumerate(chord_letters):
+            # Vertical stretches and pinches
+            if curr.vertical_distance_to_home_row != 0:
+                if abs(curr.vertical_distance_to_home_row) > 1:
+                    score += self.weights["vertical_stretch"]
+                for prev in chord_letters[:i]:
+                    if prev.vertical_distance_to_home_row != 0:
+                        if (
+                            prev.vertical_distance_to_home_row
+                            * curr.vertical_distance_to_home_row
+                        ) < 0:
+                            score += self.weights["vertical_pinch"]
+
+            # Horizontal stretches and pinches
+            if curr.horizontal_distance_to_home_row != 0:
+                if curr.finger_to_left in {l.finger for l in chord_letters[:i]}:
+                    score += self.weights["horizontal_stretch"]
+                if curr.finger_to_right in {l.finger for l in chord_letters[:i]}:
+                    score += self.weights["horizontal_stretch"]
+                for prev in chord_letters[:i]:
+                    if (
+                        prev.horizontal_distance_to_home_row
+                        * curr.horizontal_distance_to_home_row
+                    ) < 0:
+                        score += self.weights["horizontal_pinch"]
+
+        return score
 
     def _calculate_movement_combinations(self, chord: str) -> float:
         """Calculate score for movement combinations in chord."""
-        # Implementation would depend on your keyboard layout
-        return 0.0  # Placeholder
+        if not hasattr(self, "keyboard_layout"):
+            self.keyboard_layout = self._load_keyboard_layout(
+                Path(self.config.keylayout_csv_file)
+            )
+
+        score = 0.0
+        chord_letters = [
+            self.keyboard_layout[c] for c in chord if c in self.keyboard_layout
+        ]
+        used_fingers = [l.finger for l in chord_letters]
+
+        # Check for same finger usage
+        for i in range(1, len(used_fingers)):
+            if used_fingers[i] == used_fingers[i - 1]:
+                score += self.weights["same_finger_double"]
+                if i > 1 and used_fingers[i] == used_fingers[i - 2]:
+                    score += self.weights["same_finger_triple"]
+
+        # Check for awkward combinations
+        for i in range(1, len(used_fingers)):
+            curr, prev = used_fingers[i], used_fingers[i - 1]
+
+            # Pinky-ring stretches
+            if (
+                prev in (FingerIndex.LPINKY, FingerIndex.RPINKY)
+                and curr in (FingerIndex.LRING, FingerIndex.RRING)
+            ) or (
+                prev in (FingerIndex.LRING, FingerIndex.RRING)
+                and curr in (FingerIndex.LPINKY, FingerIndex.RPINKY)
+            ):
+                score += self.weights["pinky_ring_stretch"]
+
+            # Ring-middle scissors
+            if (
+                prev in (FingerIndex.LRING, FingerIndex.RRING)
+                and curr in (FingerIndex.LMIDDLE, FingerIndex.RMIDDLE)
+            ) or (
+                prev in (FingerIndex.LMIDDLE, FingerIndex.RMIDDLE)
+                and curr in (FingerIndex.LRING, FingerIndex.RRING)
+            ):
+                score += self.weights["ring_middle_scissor"]
+
+            # Middle-index stretches
+            if (
+                prev in (FingerIndex.LMIDDLE, FingerIndex.RMIDDLE)
+                and curr in (FingerIndex.LINDEX, FingerIndex.RINDEX)
+            ) or (
+                prev in (FingerIndex.LINDEX, FingerIndex.RINDEX)
+                and curr in (FingerIndex.LMIDDLE, FingerIndex.RMIDDLE)
+            ):
+                score += self.weights["middle_index_stretch"]
+
+        return score
 
     def _calculate_visual_similarity(self, word: str, chord: str) -> float:
         """Calculate visual similarity between word and chord."""
