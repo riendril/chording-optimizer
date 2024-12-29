@@ -1,6 +1,6 @@
 # Artifacts
-data/input/
-data/output/
+data/input/*
+data/output/*
 
 # OS-specific files
 .DS_Store
