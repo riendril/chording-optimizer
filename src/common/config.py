@@ -2,51 +2,55 @@
 
 import configparser
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from pathlib import Path
 from typing import Dict, Optional
 
-from .metrics import (
+from src.common.layout import KeyboardFormat
+from src.common.shared_types import (
     AssignmentMetricType,
     SetMetricType,
-    StandaloneCombinationType,
-    StandaloneMovementType,
+    StandaloneMetricType,
 )
+
+
+class OutputFormat(Enum):
+    """Enum for the currently supported output formats"""
+
+    STANDARD_JSON = auto()
 
 
 @dataclass
 class StandaloneWeights:
     """Weights for standalone metrics"""
 
-    movement_weights: Dict[StandaloneMovementType, float] = field(default_factory=dict)
-    combination_weights: Dict[StandaloneCombinationType, float] = field(
-        default_factory=dict
-    )
+    weights: Dict[StandaloneMetricType, float] = field(default_factory=dict)
 
 
 @dataclass
 class AssignmentWeights:
     """Weights for assignment metrics"""
 
-    metric_weights: Dict[AssignmentMetricType, float] = field(default_factory=dict)
+    weights: Dict[AssignmentMetricType, float] = field(default_factory=dict)
 
 
 @dataclass
 class SetWeights:
     """Weights for set metrics"""
 
-    metric_weights: Dict[SetMetricType, float] = field(default_factory=dict)
+    weights: Dict[SetMetricType, float] = field(default_factory=dict)
 
 
 @dataclass
 class GeneratorConfig:
     """Configuration parameters for chord generation"""
 
-    # Required parameters
-    keylayout_type: str
+    # General parameters
+    keyboard_format: KeyboardFormat
     keylayout_csv_file: Path
     max_letters: int
     min_letters: int
-    output_type: str
+    output_format: OutputFormat
 
     # Weights
     standalone_weights: StandaloneWeights
@@ -59,55 +63,45 @@ class GeneratorConfig:
         config = configparser.ConfigParser(inline_comment_prefixes="#")
 
         if config_path is None:
-            config_path = Path("generator.config")
+            config_path = Path("data/input/generator.config")
 
         if not config_path.exists():
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
         config.read(config_path)
 
-        # Required fields
-        required = config["REQUIRED"]
-        standalone = config["STANDALONE_WEIGHTS"]
-        assignment = config["ASSIGNMENT_WEIGHTS"]
-        set_weights = config["SET_WEIGHTS"]
+        general_section = config["GENERAL"]
+        standalone_weights_section = config["STANDALONE_WEIGHTS"]
+        assignment_weights_section = config["ASSIGNMENT_WEIGHTS"]
+        set_weights_section = config["SET_WEIGHTS"]
 
-        # Load movement weights using enum
-        movement_weights = {
-            movement_type: float(standalone[f"{movement_type.name}_WEIGHT"])
-            for movement_type in StandaloneMovementType
-        }
-
-        # Load combination weights using enum
-        combination_weights = {
-            combination_type: float(standalone[f"{combination_type.name}_WEIGHT"])
-            for combination_type in StandaloneCombinationType
+        # Load standalone weights using enum
+        standalone_weights = {
+            metric_type: float(standalone_weights_section[f"{metric_type.name}_WEIGHT"])
+            for metric_type in StandaloneMetricType
         }
 
         # Load assignment weights using enum
         assignment_weights = {
-            metric_type: float(assignment[f"{metric_type.name}_WEIGHT"])
+            metric_type: float(assignment_weights_section[f"{metric_type.name}_WEIGHT"])
             for metric_type in AssignmentMetricType
         }
 
         # Load set weights using enum
         set_metric_weights = {
-            metric_type: float(set_weights[f"{metric_type.name}_WEIGHT"])
+            metric_type: float(set_weights_section[f"{metric_type.name}_WEIGHT"])
             for metric_type in SetMetricType
         }
 
         return cls(
-            keylayout_type=required["KEYLAYOUT_TYPE"],
-            keylayout_csv_file=Path(required["KEYLAYOUT_CSV_FILE"]),
-            max_letters=int(required["MAX_LETTERS"]),
-            min_letters=int(required["MIN_LETTERS"]),
-            output_type=required["OUTPUT_TYPE"],
-            standalone_weights=StandaloneWeights(
-                movement_weights=movement_weights,
-                combination_weights=combination_weights,
-            ),
-            assignment_weights=AssignmentWeights(metric_weights=assignment_weights),
-            set_weights=SetWeights(metric_weights=set_metric_weights),
+            keyboard_format=KeyboardFormat(general_section["KEYBOARD_FORMAT"]),
+            keylayout_csv_file=Path(general_section["KEYLAYOUT_CSV_FILE"]),
+            max_letters=int(general_section["MAX_LETTERS"]),
+            min_letters=int(general_section["MIN_LETTERS"]),
+            output_format=OutputFormat(general_section["OUTPUT_FORMAT"]),
+            standalone_weights=StandaloneWeights(weights=standalone_weights),
+            assignment_weights=AssignmentWeights(weights=assignment_weights),
+            set_weights=SetWeights(weights=set_metric_weights),
         )
 
     def validate(self) -> None:
@@ -116,26 +110,20 @@ class GeneratorConfig:
             raise ValueError("MIN_LETTERS must be at least 1")
         if self.max_letters < self.min_letters:
             raise ValueError("MAX_LETTERS must be greater than or equal to MIN_LETTERS")
-        if self.keylayout_type not in ["matrix"]:
-            raise ValueError("Unsupported KEYLAYOUT_TYPE")
-        if self.output_type not in ["visual"]:
-            raise ValueError("Unsupported OUTPUT_TYPE")
+        if self.keyboard_format not in ["matrix"]:
+            raise ValueError("Unsupported KEYBOARD_FORMAT")
+        if self.output_format not in ["visual"]:
+            raise ValueError("Unsupported OUTPUT_FORMAT")
 
         # Validate that all enum values have weights
-        for movement_type in StandaloneMovementType:
-            if movement_type not in self.standalone_weights.movement_weights:
-                raise ValueError(f"Missing weight for movement type: {movement_type}")
-
-        for combination_type in StandaloneCombinationType:
-            if combination_type not in self.standalone_weights.combination_weights:
-                raise ValueError(
-                    f"Missing weight for combination type: {combination_type}"
-                )
+        for metric_type in StandaloneMetricType:
+            if metric_type not in self.standalone_weights.weights:
+                raise ValueError(f"Missing weight for standalone metric: {metric_type}")
 
         for metric_type in AssignmentMetricType:
-            if metric_type not in self.assignment_weights.metric_weights:
+            if metric_type not in self.assignment_weights.weights:
                 raise ValueError(f"Missing weight for assignment metric: {metric_type}")
 
         for metric_type in SetMetricType:
-            if metric_type not in self.set_weights.metric_weights:
+            if metric_type not in self.set_weights.weights:
                 raise ValueError(f"Missing weight for set metric: {metric_type}")
