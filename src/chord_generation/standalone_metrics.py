@@ -3,15 +3,14 @@ Standalone metrics for individual chord evaluation.
 Usage:
     calculator = StandaloneMetricCalculator(config)
     chord_data = ChordData(...)
-    metrics = calculator.calculate(chord_data)
+    standalone_cost = calculator.calculate(chord_data)
 """
 
-from dataclasses import dataclass
-from enum import Enum
-from typing import Callable, Dict, List, Tuple
+from math import sqrt
+from typing import Callable, Dict, List
 
 from src.common.config import GeneratorConfig
-from src.common.layout import Finger, LetterData
+from src.common.layout import Finger
 from src.common.shared_types import ChordData, StandaloneMetrics, StandaloneMetricType
 
 # Type alias for standalone metric calculation functions
@@ -63,101 +62,65 @@ class StandaloneMetricCalculator:
         return StandaloneMetrics(costs=costs)
 
     def _calc_chord_length(self, chord: ChordData) -> float:
-        """Calculate base cost based on chord length"""
+        """Calculate length cost"""
         return float(chord.length)
 
     def _calc_horizontal_stretch(self, chord: ChordData) -> float:
-        """Calculate horizontal stretching cost"""
-        max_stretch = 0
-        for i, letter1 in enumerate(chord.letters):
-            for letter2 in chord.letters[i + 1 :]:
-                if letter1.finger.name[0] == letter2.finger.name[0]:  # Same hand
-                    stretch = abs(
-                        letter1.horizontal_distance_to_home_row
-                        - letter2.horizontal_distance_to_home_row
-                    )
-                    max_stretch = max(max_stretch, stretch)
-        return float(max_stretch)
-
-    def _calc_vertical_stretch(self, chord: ChordData) -> float:
-        """Calculate vertical stretching cost"""
-        max_stretch = 0
-        for i, letter1 in enumerate(chord.letters):
-            for letter2 in chord.letters[i + 1 :]:
-                if letter1.finger.name[0] == letter2.finger.name[0]:  # Same hand
-                    stretch = abs(
-                        letter1.vertical_distance_to_home_row
-                        - letter2.vertical_distance_to_home_row
-                    )
-                    max_stretch = max(max_stretch, stretch)
-        return float(max_stretch)
-
-    def _calc_diagonal_stretch(self, chord: ChordData) -> float:
-        """Calculate diagonal stretching cost"""
-        max_stretch = 0
-        for i, letter1 in enumerate(chord.letters):
-            for letter2 in chord.letters[i + 1 :]:
-                if letter1.finger.name[0] == letter2.finger.name[0]:  # Same hand
-                    h_stretch = abs(
-                        letter1.horizontal_distance_to_home_row
-                        - letter2.horizontal_distance_to_home_row
-                    )
-                    v_stretch = abs(
-                        letter1.vertical_distance_to_home_row
-                        - letter2.vertical_distance_to_home_row
-                    )
-                    diagonal = (h_stretch**2 + v_stretch**2) ** 0.5
-                    max_stretch = max(max_stretch, diagonal)
-        return float(max_stretch)
+        """Calculate horizontal stretching cost as sum of horizontal stretches"""
+        stretch_sum = 0.0
+        for key in chord.keys:
+            stretch_sum += max(0, key.horizontal_distance_to_home_row)
+        return stretch_sum
 
     def _calc_horizontal_pinch(self, chord: ChordData) -> float:
-        """Calculate horizontal pinching cost"""
-        max_pinch = 0
-        for i, letter1 in enumerate(chord.letters):
-            for letter2 in chord.letters[i + 1 :]:
-                if (
-                    letter1.finger_to_right == letter2.finger
-                    or letter2.finger_to_right == letter1.finger
-                ):
-                    pinch = abs(
-                        letter1.horizontal_distance_to_home_row
-                        - letter2.horizontal_distance_to_home_row
-                    )
-                    max_pinch = max(max_pinch, pinch)
-        return float(max_pinch)
+        """Calculate horizontal pinching cost as sum of horizontal pinches"""
+        pinch_sum = 0.0
+        for key in chord.keys:
+            pinch_sum += min(0, key.horizontal_distance_to_home_row)
+        return pinch_sum
+
+    def _calc_vertical_stretch(self, chord: ChordData) -> float:
+        """Calculate vertical stretching cost as sum of vertical stretches"""
+        stretch_sum = 0.0
+        for key in chord.keys:
+            stretch_sum += max(0, key.vertical_distance_to_home_row)
+        return stretch_sum
 
     def _calc_vertical_pinch(self, chord: ChordData) -> float:
-        """Calculate vertical pinching cost"""
-        max_pinch = 0
-        for i, letter1 in enumerate(chord.letters):
-            for letter2 in chord.letters[i + 1 :]:
-                if (
-                    letter1.finger_to_right == letter2.finger
-                    or letter2.finger_to_right == letter1.finger
-                ):
-                    pinch = abs(
-                        letter1.vertical_distance_to_home_row
-                        - letter2.vertical_distance_to_home_row
+        """Calculate vertical pinching cost as sum of vertical pinches"""
+        pinch_sum = 0.0
+        for key in chord.keys:
+            pinch_sum += min(0, key.vertical_distance_to_home_row)
+        return pinch_sum
+
+    def _calc_diagonal_stretch(self, chord: ChordData) -> float:
+        """Calculate diagonal stretching cost as sum of diagonal stretches"""
+        stretch_sum = 0.0
+        for key in chord.keys:
+            if key.vertical_distance_to_home_row > 0:
+                if key.horizontal_distance_to_home_row > 0:
+                    stretch_sum += sqrt(
+                        key.vertical_distance_to_home_row**2
+                        + key.horizontal_distance_to_home_row**2
                     )
-                    max_pinch = max(max_pinch, pinch)
-        return float(max_pinch)
+        return stretch_sum
 
     def _calc_diagonal_pinch(self, chord: ChordData) -> float:
         """Calculate diagonal pinching cost"""
         max_pinch = 0
-        for i, letter1 in enumerate(chord.letters):
-            for letter2 in chord.letters[i + 1 :]:
+        for i, key1 in enumerate(chord.keys):
+            for key2 in chord.keys[i + 1 :]:
                 if (
-                    letter1.finger_to_right == letter2.finger
-                    or letter2.finger_to_right == letter1.finger
+                    key1.finger_to_right == key2.finger
+                    or key2.finger_to_right == key1.finger
                 ):
                     h_pinch = abs(
-                        letter1.horizontal_distance_to_home_row
-                        - letter2.horizontal_distance_to_home_row
+                        key1.horizontal_distance_to_home_row
+                        - key2.horizontal_distance_to_home_row
                     )
                     v_pinch = abs(
-                        letter1.vertical_distance_to_home_row
-                        - letter2.vertical_distance_to_home_row
+                        key1.vertical_distance_to_home_row
+                        - key2.vertical_distance_to_home_row
                     )
                     diagonal = (h_pinch**2 + v_pinch**2) ** 0.5
                     max_pinch = max(max_pinch, diagonal)
@@ -166,13 +129,13 @@ class StandaloneMetricCalculator:
     def _calc_same_finger_double_adjacent(self, chord: ChordData) -> float:
         """Calculate cost for adjacent keys pressed by same finger"""
         count = 0
-        for i, letter1 in enumerate(chord.letters):
-            for letter2 in chord.letters[i + 1 :]:
+        for i, key1 in enumerate(chord.keys):
+            for key2 in chord.keys[i + 1 :]:
                 if (
-                    letter1.finger == letter2.finger
+                    key1.finger == key2.finger
                     and abs(
-                        letter1.vertical_distance_to_home_row
-                        - letter2.vertical_distance_to_home_row
+                        key1.vertical_distance_to_home_row
+                        - key2.vertical_distance_to_home_row
                     )
                     == 1
                 ):
@@ -182,13 +145,13 @@ class StandaloneMetricCalculator:
     def _calc_same_finger_double_gap(self, chord: ChordData) -> float:
         """Calculate cost for non-adjacent keys pressed by same finger"""
         count = 0
-        for i, letter1 in enumerate(chord.letters):
-            for letter2 in chord.letters[i + 1 :]:
+        for i, key1 in enumerate(chord.keys):
+            for key2 in chord.keys[i + 1 :]:
                 if (
-                    letter1.finger == letter2.finger
+                    key1.finger == key2.finger
                     and abs(
-                        letter1.vertical_distance_to_home_row
-                        - letter2.vertical_distance_to_home_row
+                        key1.vertical_distance_to_home_row
+                        - key2.vertical_distance_to_home_row
                     )
                     > 1
                 ):
@@ -198,8 +161,8 @@ class StandaloneMetricCalculator:
     def _calc_same_finger_triple(self, chord: ChordData) -> float:
         """Calculate cost for three keys pressed by same finger"""
         finger_counts = {}
-        for letter in chord.letters:
-            finger_counts[letter.finger] = finger_counts.get(letter.finger, 0) + 1
+        for key in chord.keys:
+            finger_counts[key.finger] = finger_counts.get(key.finger, 0) + 1
         return float(sum(1 for count in finger_counts.values() if count >= 3))
 
     def _calc_full_scissor_double(self, chord: ChordData) -> float:
@@ -229,13 +192,13 @@ class StandaloneMetricCalculator:
             Count of scissor movements found
         """
         finger_positions = {}
-        for letter in chord.letters:
-            if letter.finger not in finger_positions:
-                finger_positions[letter.finger] = []
-            finger_positions[letter.finger].append(
+        for key in chord.keys:
+            if key.finger not in finger_positions:
+                finger_positions[key.finger] = []
+            finger_positions[key.finger].append(
                 (
-                    letter.vertical_distance_to_home_row,
-                    letter.horizontal_distance_to_home_row,
+                    key.vertical_distance_to_home_row,
+                    key.horizontal_distance_to_home_row,
                 )
             )
 
@@ -254,19 +217,19 @@ class StandaloneMetricCalculator:
     def _calc_half_scissor_double(self, chord: ChordData) -> float:
         """Calculate cost for half scissor movement between two fingers"""
         count = 0
-        for i, letter1 in enumerate(chord.letters):
-            for letter2 in chord.letters[i + 1 :]:
+        for i, key1 in enumerate(chord.keys):
+            for key2 in chord.keys[i + 1 :]:
                 if (
-                    letter1.finger_to_right == letter2.finger
-                    or letter2.finger_to_right == letter1.finger
+                    key1.finger_to_right == key2.finger
+                    or key2.finger_to_right == key1.finger
                 ):
                     # Check for partial crossing movement
                     if (
-                        letter1.vertical_distance_to_home_row > 0
-                        and letter2.vertical_distance_to_home_row < 0
+                        key1.vertical_distance_to_home_row > 0
+                        and key2.vertical_distance_to_home_row < 0
                     ) or (
-                        letter1.vertical_distance_to_home_row < 0
-                        and letter2.vertical_distance_to_home_row > 0
+                        key1.vertical_distance_to_home_row < 0
+                        and key2.vertical_distance_to_home_row > 0
                     ):
                         count += 1
         return float(count)
@@ -274,12 +237,12 @@ class StandaloneMetricCalculator:
     def _calc_horizontal_stretch_double(self, chord: ChordData) -> float:
         """Calculate cost for horizontal stretching between two fingers"""
         max_stretch = 0
-        for i, letter1 in enumerate(chord.letters):
-            for letter2 in chord.letters[i + 1 :]:
-                if letter1.finger.name[0] == letter2.finger.name[0]:  # Same hand
+        for i, key1 in enumerate(chord.keys):
+            for key2 in chord.keys[i + 1 :]:
+                if key1.finger.name[0] == key2.finger.name[0]:  # Same hand
                     stretch = abs(
-                        letter1.horizontal_distance_to_home_row
-                        - letter2.horizontal_distance_to_home_row
+                        key1.horizontal_distance_to_home_row
+                        - key2.horizontal_distance_to_home_row
                     )
                     if stretch >= 2:  # Only count significant stretches
                         max_stretch = max(max_stretch, stretch)
@@ -297,6 +260,27 @@ class StandaloneMetricCalculator:
             chord, [Finger.L_RING, Finger.L_INDEX, Finger.R_RING, Finger.R_INDEX]
         )
 
+    def _is_crossing_movement(self, positions: List[tuple]) -> bool:
+        """Check if a sequence of finger positions creates a crossing movement.
+
+        Args:
+            positions: List of (vertical, horizontal) positions for each finger
+
+        Returns:
+            True if the movements cross (create scissors), False otherwise
+        """
+        # Check if any adjacent pair of fingers creates a crossing pattern
+        for i in range(len(positions) - 1):
+            pos1 = positions[i]
+            pos2 = positions[i + 1]
+
+            # Check if vertical movements cross over
+            if (pos1[0] > 0 and pos2[0] < 0) or (pos1[0] < 0 and pos2[0] > 0):
+                # Also verify horizontal positions create a potential crossing
+                if abs(pos1[1] - pos2[1]) > 0:
+                    return True
+        return False
+
     def _calc_specific_finger_scissor(
         self, chord: ChordData, target_fingers: List[Finger]
     ) -> float:
@@ -310,20 +294,20 @@ class StandaloneMetricCalculator:
             Count of scissor movements between specified fingers
         """
         count = 0
-        for i, letter1 in enumerate(chord.letters):
-            if letter1.finger not in target_fingers:
+        for i, key1 in enumerate(chord.keys):
+            if key1.finger not in target_fingers:
                 continue
-            for letter2 in chord.letters[i + 1 :]:
-                if letter2.finger not in target_fingers:
+            for key2 in chord.keys[i + 1 :]:
+                if key2.finger not in target_fingers:
                     continue
-                if letter1.finger.name[0] == letter2.finger.name[0]:  # Same hand
+                if key1.finger.name[0] == key2.finger.name[0]:  # Same hand
                     # Check for crossing movement
                     if (
-                        letter1.vertical_distance_to_home_row > 0
-                        and letter2.vertical_distance_to_home_row < 0
+                        key1.vertical_distance_to_home_row > 0
+                        and key2.vertical_distance_to_home_row < 0
                     ) or (
-                        letter1.vertical_distance_to_home_row < 0
-                        and letter2.vertical_distance_to_home_row > 0
+                        key1.vertical_distance_to_home_row < 0
+                        and key2.vertical_distance_to_home_row > 0
                     ):
                         count += 1
         return float(count)

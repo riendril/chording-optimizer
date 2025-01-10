@@ -1,8 +1,16 @@
+"""Types shared across the chord generator modules"""
+
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Dict, List
 
-from src.common.layout import LetterData
+from src.common.layout import KeyPosition
+
+
+class OutputFormat(Enum):
+    """Supported output formats for chord generation"""
+
+    STANDARD_JSON = auto()
 
 
 @dataclass
@@ -20,7 +28,7 @@ class ChordData:
     """Represents preprocessed data for a chord"""
 
     length: int
-    letters: List[LetterData]
+    keys: List[KeyPosition]
 
 
 @dataclass
@@ -36,10 +44,10 @@ class StandaloneMetricType(Enum):
 
     CHORD_LENGTH = auto()
     HORIZONTAL_STRETCH = auto()
-    VERTICAL_STRETCH = auto()
-    DIAGONAL_STRETCH = auto()
     HORIZONTAL_PINCH = auto()
+    VERTICAL_STRETCH = auto()
     VERTICAL_PINCH = auto()
+    DIAGONAL_STRETCH = auto()
     DIAGONAL_PINCH = auto()
     SAME_FINGER_DOUBLE_ADJACENT = auto()
     SAME_FINGER_DOUBLE_GAP = auto()
