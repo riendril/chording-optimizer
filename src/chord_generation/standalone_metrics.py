@@ -7,8 +7,9 @@ Usage:
 """
 
 from math import sqrt
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
+from src.common.benchmarking import Benchmark
 from src.common.config import GeneratorConfig
 from src.common.layout import Finger
 from src.common.shared_types import ChordData, StandaloneMetrics, StandaloneMetricType
@@ -20,9 +21,10 @@ StandaloneMetricFn = Callable[[ChordData], float]
 class StandaloneMetricCalculator:
     """Calculates metrics for individual chords using configured weights"""
 
-    def __init__(self, config: GeneratorConfig):
+    def __init__(self, config: GeneratorConfig, benchmark: Optional[Benchmark] = None):
         """Initialize calculator with configuration weights"""
         self.weights = config.standalone_weights.weights
+        self.benchmark = benchmark
         # Map metric types to their calculation functions
         self.metric_functions: Dict[StandaloneMetricType, StandaloneMetricFn] = {
             StandaloneMetricType.CHORD_LENGTH: self._calc_chord_length,
@@ -46,17 +48,15 @@ class StandaloneMetricCalculator:
         }
 
     def calculate(self, chord: ChordData) -> StandaloneMetrics:
-        """Calculate all metrics for a single chord
-
-        Args:
-            chord: Preprocessed chord data
-
-        Returns:
-            Complete set of weighted metric costs for the chord
-        """
+        """Calculate all metrics for a single chord"""
         costs = {}
         for metric_type in StandaloneMetricType:
-            raw_cost = self.metric_functions[metric_type](chord)
+            if self.benchmark is not None:
+                self.benchmark.start_metric_calculation(metric_type.name)
+                raw_cost = self.metric_functions[metric_type](chord)
+                self.benchmark.end_metric_calculation()
+            else:
+                raw_cost = self.metric_functions[metric_type](chord)
             costs[metric_type] = raw_cost * self.weights[metric_type]
 
         return StandaloneMetrics(costs=costs)

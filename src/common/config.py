@@ -45,11 +45,8 @@ class BenchmarkOptions:
     """Performance benchmarking configuration"""
 
     enabled: bool
-    include_memory_stats: bool
-    include_timing_stats: bool
-    track_generation_phases: bool
-    track_metric_types: bool
-    sample_interval: int
+    track_individual_metrics: bool
+    visual_update_interval: int
 
 
 @dataclass
@@ -71,6 +68,18 @@ class SetWeights:
     """Weights for set metrics"""
 
     weights: Dict[SetMetricType, float] = field(default_factory=dict)
+
+
+def _parse_bool(value: str) -> bool:
+    """Parse string boolean values from config file
+
+    Args:
+        value: String value from config file
+
+    Returns:
+        Boolean interpretation of the string
+    """
+    return value.strip().lower() in ["true", "1", "yes", "on"]
 
 
 @dataclass
@@ -126,21 +135,22 @@ class GeneratorConfig:
 
         # Parse debug config
         debug_config = DebugOptions(
-            enabled=bool(debug_section["ENABLED"]),
+            enabled=_parse_bool(debug_section["ENABLED"]),
             log_level=LogLevel[debug_section["LOG_LEVEL"]],
             log_file=Path(debug_section["LOG_FILE"]),
-            print_cost_details=bool(debug_section["PRINT_COST_DETAILS"]),
-            save_intermediate_results=bool(debug_section["SAVE_INTERMEDIATE_RESULTS"]),
+            print_cost_details=_parse_bool(debug_section["PRINT_COST_DETAILS"]),
+            save_intermediate_results=_parse_bool(
+                debug_section["SAVE_INTERMEDIATE_RESULTS"]
+            ),
         )
 
         # Parse benchmark config
         benchmark_config = BenchmarkOptions(
-            enabled=bool(benchmark_section["ENABLED"]),
-            include_memory_stats=bool(benchmark_section["INCLUDE_MEMORY_STATS"]),
-            include_timing_stats=bool(benchmark_section["INCLUDE_TIMING_STATS"]),
-            track_generation_phases=bool(benchmark_section["TRACK_GENERATION_PHASES"]),
-            track_metric_types=bool(benchmark_section["TRACK_METRIC_TYPES"]),
-            sample_interval=int(benchmark_section["SAMPLE_INTERVAL"]),
+            enabled=_parse_bool(benchmark_section["ENABLED"]),
+            track_individual_metrics=_parse_bool(
+                benchmark_section["TRACK_INDIVIDUAL_METRICS"]
+            ),
+            visual_update_interval=int(benchmark_section["VISUAL_UPDATE_INTERVAL"]),
         )
 
         # Load metric weights

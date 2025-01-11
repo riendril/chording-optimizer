@@ -75,13 +75,12 @@ def analyze_chords(
         Dictionary mapping chords to their metric costs
     """
     results = {}
+    total_operations = len(chords)  # For progress tracking
+    base_progress = total_operations  # Starting point from chord generation phase
 
     for i, chord in enumerate(chords):
-        if (
-            generator_config.benchmark.enabled
-            and i % generator_config.benchmark.sample_interval == 0
-        ):
-            benchmark.update_phase(items_processed=i)
+        if generator_config.benchmark.enabled:
+            benchmark.update_phase(items_processed=base_progress + i)
 
         # Calculate metrics for current chord
         chord_keys = [key_positions[c] for c in chord]
@@ -128,7 +127,7 @@ def generate_chords(generator_config: GeneratorConfig) -> Dict:
     ):
         raise ValueError("Invalid min/max letter configuration")
 
-    calculator = StandaloneMetricCalculator(generator_config)
+    calculator = StandaloneMetricCalculator(generator_config, benchmark)
     base_name = generator_config.keylayout_file.stem
 
     # End initialization phase
@@ -170,18 +169,6 @@ def generate_chords(generator_config: GeneratorConfig) -> Dict:
 
     base_filename = f"Chords_{base_name}_{generator_config.min_letters}to{generator_config.max_letters}"
 
-    # Write output files
-    output_data = {
-        "name": base_filename,
-        "min_length": generator_config.min_letters,
-        "max_length": generator_config.max_letters,
-        "chords": all_chords,
-    }
-
-    chords_file = CHORDS_OUTPUT_DIR / f"{base_filename}.json"
-    with open(chords_file, "w", encoding="utf-8") as f:
-        json.dump(output_data, f, indent=2)
-
     # Calculate metrics
     metrics_file = (
         CHORDCOSTS_OUTPUT_DIR
@@ -192,14 +179,36 @@ def generate_chords(generator_config: GeneratorConfig) -> Dict:
         all_chords, calculator, key_positions, generator_config, benchmark
     )
 
-    with open(metrics_file, "w", encoding="utf-8") as f:
-        json.dump(chord_metrics, f, indent=2)
-
-    benchmark.update_phase(items_processed=len(all_chords))
+    # Update and end chord generation phase
+    benchmark.update_phase(
+        items_processed=len(all_chords) * 2
+    )  # Total progress: generation + analysis
     benchmark.end_phase()
 
-    # Get benchmark results
+    # Start finalization phase
+    benchmark.start_phase(BenchmarkPhase.FINALIZATION)
+
+    # Write chord data
+    output_data = {
+        "name": base_filename,
+        "min_length": generator_config.min_letters,
+        "max_length": generator_config.max_letters,
+        "chords": all_chords,
+    }
+
+    chords_file = CHORDS_OUTPUT_DIR / f"{base_filename}.json"
+    with open(chords_file, "w", encoding="utf-8") as f:
+        json.dump(output_data, f, indent=2)
+    benchmark.update_phase(items_processed=1)
+
+    # Write metrics data
+    with open(metrics_file, "w", encoding="utf-8") as f:
+        json.dump(chord_metrics, f, indent=2)
+    benchmark.update_phase(items_processed=2)
+
+    # Get benchmark results before ending finalization
     results = benchmark.get_results()
+    benchmark.end_phase()
 
     return {
         "total_combinations": len(all_chords),
