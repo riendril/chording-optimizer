@@ -23,35 +23,33 @@ from src.common.shared_types import (
 
 
 class LogLevel(Enum):
-    """Enum for supported logging levels"""
-
-    DEBUG = "DEBUG"
-    INFO = "INFO"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-    CRITICAL = "CRITICAL"
+    ERROR = logging.ERROR
+    WARNING = logging.WARNING
+    INFO = logging.INFO
+    DEBUG = logging.DEBUG
 
 
 @dataclass
-class DebugConfig:
-    """Debug and logging configuration"""
+class DebugOptions:
+    """Debug and logging options"""
 
     enabled: bool
     log_level: LogLevel
     log_file: Optional[Path]
-    print_chord_details: bool  # Print detailed info for each generated chord
+    print_cost_details: bool  # Print detailed info for each generated chord
     save_intermediate_results: bool  # Save intermediate processing results
 
 
 @dataclass
-class BenchmarkConfig:
+class BenchmarkOptions:
     """Performance benchmarking configuration"""
 
     enabled: bool
     include_memory_stats: bool
     include_timing_stats: bool
-    print_progress: bool  # Print progress during generation
-    output_file: Optional[Path]  # Where to save benchmark results
+    track_generation_phases: bool
+    track_metric_types: bool
+    sample_interval: int
 
 
 @dataclass
@@ -85,9 +83,9 @@ class GeneratorConfig:
     min_letters: int
     output_format: OutputFormat
 
-    # Debug and benchmark configurations
-    debug: DebugConfig
-    benchmark: BenchmarkConfig
+    # Debug and benchmark options
+    debug: DebugOptions
+    benchmark: BenchmarkOptions
 
     # Weights
     standalone_weights: StandaloneWeights
@@ -127,37 +125,22 @@ class GeneratorConfig:
         set_weights_section = config["SET_WEIGHTS"]
 
         # Parse debug config
-        log_level_str = debug_section.get("LOG_LEVEL", "INFO")
-        if not log_level_str:
-            log_level_str = "INFO"
-
-        log_file_path = debug_section.get("LOG_FILE")
-        debug_config = DebugConfig(
-            enabled=debug_section.getboolean("ENABLED", fallback=False),
-            log_level=LogLevel[log_level_str.upper()],
-            log_file=Path(log_file_path) if log_file_path else None,
-            print_chord_details=debug_section.getboolean(
-                "PRINT_CHORD_DETAILS", fallback=False
-            ),
-            save_intermediate_results=debug_section.getboolean(
-                "SAVE_INTERMEDIATE_RESULTS", fallback=False
-            ),
+        debug_config = DebugOptions(
+            enabled=bool(debug_section["ENABLED"]),
+            log_level=LogLevel[debug_section["LOG_LEVEL"]],
+            log_file=Path(debug_section["LOG_FILE"]),
+            print_cost_details=bool(debug_section["PRINT_COST_DETAILS"]),
+            save_intermediate_results=bool(debug_section["SAVE_INTERMEDIATE_RESULTS"]),
         )
 
         # Parse benchmark config
-        benchmark_file_path = benchmark_section.get("OUTPUT_FILE")
-        benchmark_config = BenchmarkConfig(
-            enabled=benchmark_section.getboolean("ENABLED", fallback=False),
-            include_memory_stats=benchmark_section.getboolean(
-                "INCLUDE_MEMORY_STATS", fallback=True
-            ),
-            include_timing_stats=benchmark_section.getboolean(
-                "INCLUDE_TIMING_STATS", fallback=True
-            ),
-            print_progress=benchmark_section.getboolean(
-                "PRINT_PROGRESS", fallback=True
-            ),
-            output_file=Path(benchmark_file_path) if benchmark_file_path else None,
+        benchmark_config = BenchmarkOptions(
+            enabled=bool(benchmark_section["ENABLED"]),
+            include_memory_stats=bool(benchmark_section["INCLUDE_MEMORY_STATS"]),
+            include_timing_stats=bool(benchmark_section["INCLUDE_TIMING_STATS"]),
+            track_generation_phases=bool(benchmark_section["TRACK_GENERATION_PHASES"]),
+            track_metric_types=bool(benchmark_section["TRACK_METRIC_TYPES"]),
+            sample_interval=int(benchmark_section["SAMPLE_INTERVAL"]),
         )
 
         # Load metric weights
@@ -208,13 +191,6 @@ class GeneratorConfig:
                     f"Log file directory does not exist: {self.debug.log_file.parent}"
                 )
 
-        # Validate benchmark config
-        if self.benchmark.enabled and self.benchmark.output_file:
-            if not self.benchmark.output_file.parent.exists():
-                raise ValueError(
-                    f"Benchmark output directory does not exist: {self.benchmark.output_file.parent}"
-                )
-
         # Validate layout file exists
         if not self.keylayout_file.exists():
             raise ValueError(f"Layout file does not exist: {self.keylayout_file}")
@@ -241,7 +217,7 @@ class GeneratorConfig:
 
         if self.debug.log_file:
             logging.basicConfig(
-                level=self.debug.log_level.value,
+                level=logging.INFO,
                 format=log_format,
                 handlers=[
                     logging.FileHandler(self.debug.log_file),
@@ -249,4 +225,4 @@ class GeneratorConfig:
                 ],
             )
         else:
-            logging.basicConfig(level=self.debug.log_level.value, format=log_format)
+            logging.basicConfig(level=logging.INFO, format=log_format)
