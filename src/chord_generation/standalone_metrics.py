@@ -69,39 +69,39 @@ class StandaloneMetricCalculator:
         """Calculate horizontal stretching cost as sum of horizontal stretches"""
         stretch_sum = 0.0
         for key in chord.keys:
-            stretch_sum += max(0, key.horizontal_distance_to_home_row)
+            stretch_sum += max(0, key.horizontal_distance_to_resting_position)
         return stretch_sum
 
     def _calc_horizontal_pinch(self, chord: ChordData) -> float:
         """Calculate horizontal pinching cost as sum of horizontal pinches"""
         pinch_sum = 0.0
         for key in chord.keys:
-            pinch_sum += min(0, key.horizontal_distance_to_home_row)
+            pinch_sum += min(0, key.horizontal_distance_to_resting_position)
         return pinch_sum
 
     def _calc_vertical_stretch(self, chord: ChordData) -> float:
         """Calculate vertical stretching cost as sum of vertical stretches"""
         stretch_sum = 0.0
         for key in chord.keys:
-            stretch_sum += max(0, key.vertical_distance_to_home_row)
+            stretch_sum += max(0, key.vertical_distance_to_resting_position)
         return stretch_sum
 
     def _calc_vertical_pinch(self, chord: ChordData) -> float:
         """Calculate vertical pinching cost as sum of vertical pinches"""
         pinch_sum = 0.0
         for key in chord.keys:
-            pinch_sum += min(0, key.vertical_distance_to_home_row)
+            pinch_sum += min(0, key.vertical_distance_to_resting_position)
         return pinch_sum
 
     def _calc_diagonal_stretch(self, chord: ChordData) -> float:
         """Calculate diagonal stretching cost as sum of diagonal stretches"""
         stretch_sum = 0.0
         for key in chord.keys:
-            if key.vertical_distance_to_home_row > 0:
-                if key.horizontal_distance_to_home_row > 0:
+            if key.vertical_distance_to_resting_position > 0:
+                if key.horizontal_distance_to_resting_position > 0:
                     stretch_sum += sqrt(
-                        key.vertical_distance_to_home_row**2
-                        + key.horizontal_distance_to_home_row**2
+                        key.vertical_distance_to_resting_position**2
+                        + key.horizontal_distance_to_resting_position**2
                     )
         return stretch_sum
 
@@ -115,12 +115,12 @@ class StandaloneMetricCalculator:
                     or key2.finger_to_right == key1.finger
                 ):
                     h_pinch = abs(
-                        key1.horizontal_distance_to_home_row
-                        - key2.horizontal_distance_to_home_row
+                        key1.horizontal_distance_to_resting_position
+                        - key2.horizontal_distance_to_resting_position
                     )
                     v_pinch = abs(
-                        key1.vertical_distance_to_home_row
-                        - key2.vertical_distance_to_home_row
+                        key1.vertical_distance_to_resting_position
+                        - key2.vertical_distance_to_resting_position
                     )
                     diagonal = (h_pinch**2 + v_pinch**2) ** 0.5
                     max_pinch = max(max_pinch, diagonal)
@@ -134,8 +134,8 @@ class StandaloneMetricCalculator:
                 if (
                     key1.finger == key2.finger
                     and abs(
-                        key1.vertical_distance_to_home_row
-                        - key2.vertical_distance_to_home_row
+                        key1.vertical_distance_to_resting_position
+                        - key2.vertical_distance_to_resting_position
                     )
                     == 1
                 ):
@@ -150,8 +150,8 @@ class StandaloneMetricCalculator:
                 if (
                     key1.finger == key2.finger
                     and abs(
-                        key1.vertical_distance_to_home_row
-                        - key2.vertical_distance_to_home_row
+                        key1.vertical_distance_to_resting_position
+                        - key2.vertical_distance_to_resting_position
                     )
                     > 1
                 ):
@@ -197,8 +197,8 @@ class StandaloneMetricCalculator:
                 finger_positions[key.finger] = []
             finger_positions[key.finger].append(
                 (
-                    key.vertical_distance_to_home_row,
-                    key.horizontal_distance_to_home_row,
+                    key.vertical_distance_to_resting_position,
+                    key.horizontal_distance_to_resting_position,
                 )
             )
 
@@ -225,11 +225,11 @@ class StandaloneMetricCalculator:
                 ):
                     # Check for partial crossing movement
                     if (
-                        key1.vertical_distance_to_home_row > 0
-                        and key2.vertical_distance_to_home_row < 0
+                        key1.vertical_distance_to_resting_position > 0
+                        and key2.vertical_distance_to_resting_position < 0
                     ) or (
-                        key1.vertical_distance_to_home_row < 0
-                        and key2.vertical_distance_to_home_row > 0
+                        key1.vertical_distance_to_resting_position < 0
+                        and key2.vertical_distance_to_resting_position > 0
                     ):
                         count += 1
         return float(count)
@@ -241,8 +241,8 @@ class StandaloneMetricCalculator:
             for key2 in chord.keys[i + 1 :]:
                 if key1.finger.name[0] == key2.finger.name[0]:  # Same hand
                     stretch = abs(
-                        key1.horizontal_distance_to_home_row
-                        - key2.horizontal_distance_to_home_row
+                        key1.horizontal_distance_to_resting_position
+                        - key2.horizontal_distance_to_resting_position
                     )
                     if stretch >= 2:  # Only count significant stretches
                         max_stretch = max(max_stretch, stretch)
@@ -303,11 +303,11 @@ class StandaloneMetricCalculator:
                 if key1.finger.name[0] == key2.finger.name[0]:  # Same hand
                     # Check for crossing movement
                     if (
-                        key1.vertical_distance_to_home_row > 0
-                        and key2.vertical_distance_to_home_row < 0
+                        key1.vertical_distance_to_resting_position > 0
+                        and key2.vertical_distance_to_resting_position < 0
                     ) or (
-                        key1.vertical_distance_to_home_row < 0
-                        and key2.vertical_distance_to_home_row > 0
+                        key1.vertical_distance_to_resting_position < 0
+                        and key2.vertical_distance_to_resting_position > 0
                     ):
                         count += 1
         return float(count)

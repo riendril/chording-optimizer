@@ -8,6 +8,7 @@ Algorithm for generating and analyzing chords:
 import json
 import logging
 from itertools import combinations
+from math import inf
 from pathlib import Path
 from typing import Dict, List
 
@@ -38,8 +39,8 @@ def ensure_output_dirs():
         directory.mkdir(parents=True, exist_ok=True)
 
 
-def calculate_total_cost(metrics: Dict[str, float]) -> float:
-    """Calculate total cost as product of individual metric costs
+def calculate_total_chord_cost(metrics: Dict[str, float]) -> float:
+    """Calculate total cost of a chord as product of individual metric costs
 
     Args:
         metrics: Dictionary of metric names to their costs
@@ -49,9 +50,10 @@ def calculate_total_cost(metrics: Dict[str, float]) -> float:
     """
     total = 1.0
     for cost in metrics.values():
-        # Add 1 to each cost to prevent multiplication by zero
-        # and to ensure costs < 1 don't reduce the total
-        total *= 1.0 + cost
+        if cost < 0:
+            return inf
+        else:
+            total *= cost
     return total
 
 
@@ -93,7 +95,7 @@ def analyze_chords(
         }
 
         # Calculate total cost
-        total_cost = calculate_total_cost(serializable_metrics)
+        total_cost = calculate_total_chord_cost(serializable_metrics)
 
         # Build result dictionary based on debug settings
         result = {"chord": chord, "total_cost": total_cost}

@@ -25,8 +25,8 @@ class KeyPosition:
     """Position and finger assignment of a key on the input device"""
 
     finger: Finger
-    vertical_distance_to_home_row: int
-    horizontal_distance_to_home_row: int
+    vertical_distance_to_resting_position: int
+    horizontal_distance_to_resting_position: int
     finger_to_left: Optional[Finger]
     finger_to_right: Optional[Finger]
 
@@ -133,8 +133,8 @@ def load_input_device_layout(layout_file: Path) -> Dict[str, KeyPosition]:
             for char, positions in entries:
                 mapping[char] = KeyPosition(
                     finger=finger,
-                    vertical_distance_to_home_row=positions[0],
-                    horizontal_distance_to_home_row=positions[1],
+                    vertical_distance_to_resting_position=positions[0],
+                    horizontal_distance_to_resting_position=positions[1],
                     finger_to_left=finger_to_left,
                     finger_to_right=finger_to_right,
                 )

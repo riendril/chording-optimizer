@@ -1,0 +1,68 @@
+# KeyLayout: CC Default
+# Keyboard Format: Master Forge
+# Keyset: Letters only
+# Host layout interpretation: US ANSI / US ISO / DE ISO etc.
+
+# Format: "char" [vertical distance to resting position, horizontal distance to resting position]
+# positive values indicate stretch, negative numbers indicate pinch
+
+LEFT_HAND {
+  PINKY {
+
+  }
+  
+  RING {
+    "u" [-1,0]
+  }
+  
+  MIDDLE {
+    "i" [0,1]
+    "o" [-1,0]
+  }
+  
+  INDEX {
+    "r" [0,1]
+    "e" [-1,0]
+  }
+
+  THUMB {
+    "v" [1,0]
+    "m" [0,-1]
+    "k" [0,1]
+    "c" [-1,0]
+    "g" [0,-1]
+    "w" [0,1]
+    "z" [-1,0]
+  }
+}
+
+RIGHT_HAND {
+  THUMB {
+    "p" [1,0]
+    "h" [0,-1]
+    "f" [0,1]
+    "d" [-1,0]
+    "x" [1,0]
+    "b" [0,1]
+    "q" [-1,0]
+  }
+
+  INDEX {
+    "a" [0,1]
+    "t" [-1,0]
+  }
+  
+  MIDDLE {
+    "l" [0,1]
+    "n" [-1,0]
+    "j" [0,1]
+  }
+  
+  RING {
+    "y" [0,-1]
+    "s" [-1,0]
+  }
+  
+  PINKY {
+  }
+}
