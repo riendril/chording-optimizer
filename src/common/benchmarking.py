@@ -18,7 +18,9 @@ class BenchmarkPhase(Enum):
     """Standard processing phases for benchmarking"""
 
     INITIALIZATION = auto()
+    WRITING_OUTPUT = auto()
     CHORD_GENERATION = auto()
+    CHORD_COST_CALCULATION = auto()
     WORD_ASSIGNMENT = auto()
     SET_IMPROVEMENT = auto()
     FINALIZATION = auto()

@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, NamedTuple, Optional, Set, Tuple
 
 
 class Finger(Enum):
@@ -20,8 +20,7 @@ class Finger(Enum):
     R_PINKY = auto()
 
 
-@dataclass
-class KeyPosition:
+class KeyPosition(NamedTuple):
     """Position and finger assignment of a key on the input device"""
 
     finger: Finger

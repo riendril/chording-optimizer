@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Dict, List
+from typing import Dict, NamedTuple
 
 from src.common.layout import KeyPosition
 
@@ -23,12 +23,12 @@ class WordData:
     zipf_weight: float
 
 
-@dataclass
-class ChordData:
+class ChordData(NamedTuple):
     """Represents preprocessed data for a chord"""
 
+    letters: str
+    keys: tuple[KeyPosition, ...]
     length: int
-    keys: List[KeyPosition]
 
 
 @dataclass

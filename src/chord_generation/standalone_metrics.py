@@ -67,9 +67,9 @@ class StandaloneMetricCalculator:
 
     def _calc_horizontal_stretch(self, chord: ChordData) -> float:
         """Calculate horizontal stretching cost as sum of horizontal stretches"""
-        stretch_sum = 0.0
+        stretch_sum = 1.0
         for key in chord.keys:
-            stretch_sum += max(0, key.horizontal_distance_to_resting_position)
+            stretch_sum *= 1 + max(0, key.horizontal_distance_to_resting_position)
         return stretch_sum
 
     def _calc_horizontal_pinch(self, chord: ChordData) -> float:

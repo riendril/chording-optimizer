@@ -88,8 +88,8 @@ class GeneratorConfig:
 
     # General parameters
     keylayout_file: Path
-    max_letters: int
-    min_letters: int
+    max_letter_count: int
+    min_letter_count: int
     output_format: OutputFormat
 
     # Debug and benchmark options
@@ -171,8 +171,8 @@ class GeneratorConfig:
 
         return cls(
             keylayout_file=Path(general_section["KEYLAYOUT_FILE"]),
-            max_letters=int(general_section["MAX_LETTERS"]),
-            min_letters=int(general_section["MIN_LETTERS"]),
+            max_letter_count=int(general_section["MAX_LETTER_COUNT"]),
+            min_letter_count=int(general_section["MIN_LETTER_COUNT"]),
             output_format=OutputFormat[general_section["OUTPUT_FORMAT"]],
             debug=debug_config,
             benchmark=benchmark_config,
@@ -187,10 +187,12 @@ class GeneratorConfig:
         Raises:
             ValueError: If any configuration values are invalid
         """
-        if self.min_letters < 1:
-            raise ValueError("MIN_LETTERS must be at least 1")
-        if self.max_letters < self.min_letters:
-            raise ValueError("MAX_LETTERS must be greater than or equal to MIN_LETTERS")
+        if self.min_letter_count < 1:
+            raise ValueError("MIN_LETTER_COUNT must be at least 1")
+        if self.max_letter_count < self.min_letter_count:
+            raise ValueError(
+                "MAX_LETTER_COUNT must be greater than or equal to MIN_LETTER_COUNT"
+            )
         if not isinstance(self.output_format, OutputFormat):
             raise ValueError(f"Unsupported OUTPUT_FORMAT: {self.output_format}")
 
