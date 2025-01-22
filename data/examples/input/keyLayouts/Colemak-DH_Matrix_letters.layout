@@ -1,5 +1,5 @@
-# KeyLayout: CC Default
-# Keyboard Format: Master Forge
+# KeyLayout: Colemak-DH
+# Keyboard Format: Matrix (column-staggered)
 # Keyset: Letters only
 # Compatible host layout interpretations: US ANSI / US ISO / DE ISO etc.
 
@@ -12,61 +12,62 @@
 
 LEFT_HAND {
   PINKY {
-
+    "q" [1,0]    # higher position 
+    "a" [0,0]    # home position
+    "z" [-1,0]   # lower position
   }
   
   RING {
-    "u" [-1,0]
+    "w" [1,0]
+    "r" [0,0]
+    "x" [-1,0]
   }
   
   MIDDLE {
-    "i" [0,1]
-    "o" [-1,0]
+    "f" [1,0]
+    "s" [0,0]
+    "c" [-1,0]
   }
   
   INDEX {
-    "r" [0,1]
-    "e" [-1,0]
+    "p" [1,0]
+    "t" [0,0]
+    "d" [-1,0]
+    "b" [1,1]   # diagonal: higher and outward
+    "g" [0,1]
+    "v" [-1,1]
   }
 
   THUMB {
-    "v" [1,0]
-    "m" [0,-1]
-    "k" [0,1]
-    "c" [-1,0]
-    "g" [0,-1]
-    "w" [0,1]
-    "z" [-1,0]
+                # none assigned
   }
 }
 
 RIGHT_HAND {
   THUMB {
-    "p" [1,0]
-    "h" [0,-1]
-    "f" [0,1]
-    "d" [-1,0]
-    "x" [1,0]
-    "b" [0,1]
-    "q" [-1,0]
+
   }
 
   INDEX {
-    "a" [0,1]
-    "t" [-1,0]
+    "j" [1,1]
+    "m" [0,1]
+    "k" [-1,1]
+    "l" [1,0]
+    "n" [0,0]
+    "h" [-1,0]
   }
   
   MIDDLE {
-    "l" [0,1]
-    "n" [-1,0]
-    "j" [0,1]
+    "u" [1,0]
+    "e" [0,0]
   }
   
   RING {
-    "y" [0,-1]
-    "s" [-1,0]
+    "y" [1,0]
+    "i" [0,0]
   }
   
   PINKY {
+    "o" [0,0]
   }
 }

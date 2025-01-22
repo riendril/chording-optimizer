@@ -1,0 +1,73 @@
+# KeyLayout: QWERTY
+# Keyboard Format: Traditional (row-staggered)
+# Keyset: Letters only
+# Compatible host layout interpretations: US ANSI
+
+# Format: "char" [vertical_offset, horizontal_offset]
+# Vertical offset: +1 = reach up, -1 = reach down (from home row)
+# Horizontal offset: Measured as spreading/pinching of fingers relative to hand's center
+#   Positive = fingers spread outward (stretch)
+#   Negative = fingers move inward (pinch)
+# All measurements in approximate key units not considering distance between keys
+
+LEFT_HAND {
+  PINKY {
+    "q" [1,0.25]   # top row, staggered left
+    "a" [0,0]       # home row
+    "z" [-1,-0.5]    # bottom row, staggered right
+  }
+  
+  RING {
+    "w" [1,0.25]
+    "s" [0,0]
+    "x" [-1,-0.5]
+  }
+  
+  MIDDLE {
+    "e" [1,0.25]
+    "d" [0,0]
+    "c" [-1,0.5]
+  }
+  
+  INDEX {
+    "r" [1,-0.25]
+    "f" [0,0]
+    "v" [-1,0.5]
+    "t" [1,0.75]
+    "g" [0,1]
+    "b" [-1,1.5]
+  }
+
+  THUMB {
+                    # none assigned
+  }
+}
+
+RIGHT_HAND {
+  THUMB {
+                    # none assigned
+  }
+
+  INDEX {
+    "y" [1,1.25]
+    "h" [0,1]
+    "n" [-1,0.5]
+    "u" [1,0.25]
+    "j" [0,0]
+    "m" [-1,-0.5]
+  }
+  
+  MIDDLE {
+    "i" [1,-0.25]
+    "k" [0,0]
+  }
+  
+  RING {
+    "o" [1,-0.25]
+    "l" [0,0]
+  }
+  
+  PINKY {
+    "p" [1,-0.25]
+  }
+}
