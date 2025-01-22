@@ -139,7 +139,7 @@ class ChordAnalyzer:
             output_path: Path where the JSON file should be saved
         """
         with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(analysis, f, indent=2)
+            json.dump(analysis, f, indent=2, ensure_ascii=False)
 
 
 def analyze_assignments(

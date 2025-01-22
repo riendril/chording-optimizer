@@ -174,7 +174,7 @@ def generate_chords_and_costs(
                 "count": len(current_chords),
             }
             with open(intermediate_file, "w", encoding="utf-8") as f:
-                json.dump(intermediate_data, f, indent=2)
+                json.dump(intermediate_data, f, indent=2, ensure_ascii=False)
 
     if given_benchmark:
         # End generation phase
@@ -192,7 +192,7 @@ def generate_chords_and_costs(
         "chords": [chord.letters for chord in all_chords],
     }
     with open(chords_file, "w", encoding="utf-8") as f:
-        json.dump(chord_file_contents, f, indent=2)
+        json.dump(chord_file_contents, f, indent=2, ensure_ascii=False)
 
     if given_benchmark:
         # End output phase
@@ -226,7 +226,7 @@ def generate_chords_and_costs(
         ],
     }
     with open(chord_costs_file, "w", encoding="utf-8") as f:
-        json.dump(chord_costs_file_contents, f, indent=2)
+        json.dump(chord_costs_file_contents, f, indent=2, ensure_ascii=False)
 
     if given_benchmark:
         given_benchmark.update_phase(items_processed=len(chords_with_costs))

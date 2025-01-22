@@ -487,7 +487,7 @@ def process_corpus_json(config: GeneratorConfig) -> None:
     output_filename = f"ChordsFor_{input_filename}"
     try:
         with open(output_filename, "w", encoding="utf-8") as file:
-            json.dump(output_data, file, indent=2)
+            json.dump(output_data, file, indent=2, ensure_ascii=False)
         print(f"\nOutput written to {output_filename}")
 
         print("\nOptimization Metrics:")

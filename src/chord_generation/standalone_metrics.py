@@ -26,25 +26,9 @@ class StandaloneMetricCalculator:
         self.weights = config.standalone_weights.weights
         self.benchmark = benchmark
         # Map metric types to their calculation functions
-        self.metric_functions: Dict[StandaloneMetricType, StandaloneMetricFn] = {
-            StandaloneMetricType.CHORD_LENGTH: self._calc_chord_length,
-            StandaloneMetricType.HORIZONTAL_STRETCH: self._calc_horizontal_stretch,
-            StandaloneMetricType.VERTICAL_STRETCH: self._calc_vertical_stretch,
-            StandaloneMetricType.DIAGONAL_STRETCH: self._calc_diagonal_stretch,
-            StandaloneMetricType.HORIZONTAL_PINCH: self._calc_horizontal_pinch,
-            StandaloneMetricType.VERTICAL_PINCH: self._calc_vertical_pinch,
-            StandaloneMetricType.DIAGONAL_PINCH: self._calc_diagonal_pinch,
-            StandaloneMetricType.SAME_FINGER_DOUBLE_ADJACENT: self._calc_same_finger_double_adjacent,
-            StandaloneMetricType.SAME_FINGER_DOUBLE_GAP: self._calc_same_finger_double_gap,
-            StandaloneMetricType.SAME_FINGER_TRIPLE: self._calc_same_finger_triple,
-            StandaloneMetricType.FULL_SCISSOR_DOUBLE: self._calc_full_scissor_double,
-            StandaloneMetricType.FULL_SCISSOR_TRIPLE: self._calc_full_scissor_triple,
-            StandaloneMetricType.FULL_SCISSOR_QUADRUPLE: self._calc_full_scissor_quadruple,
-            StandaloneMetricType.FULL_SCISSOR_QUINTUPLE: self._calc_full_scissor_quintuple,
-            StandaloneMetricType.HALF_SCISSOR_DOUBLE: self._calc_half_scissor_double,
-            StandaloneMetricType.HORIZONTAL_STRETCH_DOUBLE: self._calc_horizontal_stretch_double,
-            StandaloneMetricType.PINKY_RING_SCISSOR: self._calc_pinky_ring_scissor,
-            StandaloneMetricType.RING_INDEX_SCISSOR: self._calc_ring_index_scissor,
+        self.metric_functions = {
+            metric_type: getattr(self, f"_calc_{metric_type.name.lower()}")
+            for metric_type in StandaloneMetricType
         }
 
     def calculate(self, chord: ChordData) -> StandaloneMetrics:
@@ -65,37 +49,73 @@ class StandaloneMetricCalculator:
         """Calculate length cost"""
         return float(chord.length)
 
-    def _calc_horizontal_stretch(self, chord: ChordData) -> float:
-        """Calculate horizontal stretching cost as sum of horizontal stretches"""
-        stretch_sum = 1.0
-        for key in chord.keys:
-            stretch_sum *= 1 + max(0, key.horizontal_distance_to_resting_position)
-        return stretch_sum
-
     def _calc_horizontal_pinch(self, chord: ChordData) -> float:
         """Calculate horizontal pinching cost as sum of horizontal pinches"""
-        pinch_sum = 0.0
+        pinch_sum = 0
         for key in chord.keys:
-            pinch_sum += min(0, key.horizontal_distance_to_resting_position)
-        return pinch_sum
+            pinch_sum += abs(min(0, key.horizontal_distance_to_resting_position))
+        return 1 + pinch_sum
 
-    def _calc_vertical_stretch(self, chord: ChordData) -> float:
-        """Calculate vertical stretching cost as sum of vertical stretches"""
-        stretch_sum = 0.0
+    def _calc_horizontal_stretch(self, chord: ChordData) -> float:
+        """Calculate horizontal stretching cost as sum of horizontal stretches"""
+        stretch_sum = 0
         for key in chord.keys:
-            stretch_sum += max(0, key.vertical_distance_to_resting_position)
-        return stretch_sum
+            stretch_sum += max(0, key.horizontal_distance_to_resting_position)
+        return 1 + stretch_sum
 
     def _calc_vertical_pinch(self, chord: ChordData) -> float:
         """Calculate vertical pinching cost as sum of vertical pinches"""
-        pinch_sum = 0.0
+        pinch_sum = 0
         for key in chord.keys:
-            pinch_sum += min(0, key.vertical_distance_to_resting_position)
-        return pinch_sum
+            pinch_sum += abs(min(0, key.vertical_distance_to_resting_position))
+        return 1 + pinch_sum
 
-    def _calc_diagonal_stretch(self, chord: ChordData) -> float:
-        """Calculate diagonal stretching cost as sum of diagonal stretches"""
-        stretch_sum = 0.0
+    def _calc_vertical_stretch(self, chord: ChordData) -> float:
+        """Calculate vertical stretching cost as sum of vertical stretches"""
+        stretch_sum = 0
+        for key in chord.keys:
+            stretch_sum += max(0, key.vertical_distance_to_resting_position)
+        return 1 + stretch_sum
+
+    def _calc_diagonal_downward_pinch(self, chord: ChordData) -> float:
+        """Calculate diagonal downward pinching cost as sum of diagonal downward pinches"""
+        pinch_sum = 0
+        for key in chord.keys:
+            if key.vertical_distance_to_resting_position < 0:
+                if key.horizontal_distance_to_resting_position < 0:
+                    pinch_sum += sqrt(
+                        key.vertical_distance_to_resting_position**2
+                        + key.horizontal_distance_to_resting_position**2
+                    )
+        return 1 + pinch_sum
+
+    def _calc_diagonal_downward_stretch(self, chord: ChordData) -> float:
+        """Calculate diagonal downward stretching cost as sum of diagonal downward stretches"""
+        stretch_sum = 0
+        for key in chord.keys:
+            if key.vertical_distance_to_resting_position > 0:
+                if key.horizontal_distance_to_resting_position < 0:
+                    stretch_sum += sqrt(
+                        key.vertical_distance_to_resting_position**2
+                        + key.horizontal_distance_to_resting_position**2
+                    )
+        return 1 + stretch_sum
+
+    def _calc_diagonal_upward_pinch(self, chord: ChordData) -> float:
+        """Calculate diagonal upward pinching cost as sum of diagonal upward pinches"""
+        pinch_sum = 0
+        for key in chord.keys:
+            if key.vertical_distance_to_resting_position < 0:
+                if key.horizontal_distance_to_resting_position > 0:
+                    pinch_sum += sqrt(
+                        key.vertical_distance_to_resting_position**2
+                        + key.horizontal_distance_to_resting_position**2
+                    )
+        return 1 + pinch_sum
+
+    def _calc_diagonal_upward_stretch(self, chord: ChordData) -> float:
+        """Calculate diagonal upward stretching cost as sum of diagonal upward stretches"""
+        stretch_sum = 0
         for key in chord.keys:
             if key.vertical_distance_to_resting_position > 0:
                 if key.horizontal_distance_to_resting_position > 0:
@@ -103,28 +123,7 @@ class StandaloneMetricCalculator:
                         key.vertical_distance_to_resting_position**2
                         + key.horizontal_distance_to_resting_position**2
                     )
-        return stretch_sum
-
-    def _calc_diagonal_pinch(self, chord: ChordData) -> float:
-        """Calculate diagonal pinching cost"""
-        max_pinch = 0
-        for i, key1 in enumerate(chord.keys):
-            for key2 in chord.keys[i + 1 :]:
-                if (
-                    key1.finger_to_right == key2.finger
-                    or key2.finger_to_right == key1.finger
-                ):
-                    h_pinch = abs(
-                        key1.horizontal_distance_to_resting_position
-                        - key2.horizontal_distance_to_resting_position
-                    )
-                    v_pinch = abs(
-                        key1.vertical_distance_to_resting_position
-                        - key2.vertical_distance_to_resting_position
-                    )
-                    diagonal = (h_pinch**2 + v_pinch**2) ** 0.5
-                    max_pinch = max(max_pinch, diagonal)
-        return float(max_pinch)
+        return 1 + stretch_sum
 
     def _calc_same_finger_double_adjacent(self, chord: ChordData) -> float:
         """Calculate cost for adjacent keys pressed by same finger"""
@@ -140,7 +139,7 @@ class StandaloneMetricCalculator:
                     == 1
                 ):
                     count += 1
-        return float(count)
+        return 1 + float(count)
 
     def _calc_same_finger_double_gap(self, chord: ChordData) -> float:
         """Calculate cost for non-adjacent keys pressed by same finger"""
@@ -156,30 +155,30 @@ class StandaloneMetricCalculator:
                     > 1
                 ):
                     count += 1
-        return float(count)
+        return 1 + float(count)
 
     def _calc_same_finger_triple(self, chord: ChordData) -> float:
         """Calculate cost for three keys pressed by same finger"""
         finger_counts = {}
         for key in chord.keys:
             finger_counts[key.finger] = finger_counts.get(key.finger, 0) + 1
-        return float(sum(1 for count in finger_counts.values() if count >= 3))
+        return 1 + float(sum(1 for count in finger_counts.values() if count >= 3))
 
     def _calc_full_scissor_double(self, chord: ChordData) -> float:
         """Calculate cost for full scissor movement between two fingers"""
-        return self._calc_scissor_movement(chord, 2)
+        return 1 + self._calc_scissor_movement(chord, 2)
 
     def _calc_full_scissor_triple(self, chord: ChordData) -> float:
         """Calculate cost for full scissor movement between three fingers"""
-        return self._calc_scissor_movement(chord, 3)
+        return 1 + self._calc_scissor_movement(chord, 3)
 
     def _calc_full_scissor_quadruple(self, chord: ChordData) -> float:
         """Calculate cost for full scissor movement between four fingers"""
-        return self._calc_scissor_movement(chord, 4)
+        return 1 + self._calc_scissor_movement(chord, 4)
 
     def _calc_full_scissor_quintuple(self, chord: ChordData) -> float:
         """Calculate cost for full scissor movement between five fingers"""
-        return self._calc_scissor_movement(chord, 5)
+        return 1 + self._calc_scissor_movement(chord, 5)
 
     def _calc_scissor_movement(self, chord: ChordData, n_fingers: int) -> float:
         """Helper method to calculate scissor movements
@@ -212,7 +211,7 @@ class StandaloneMetricCalculator:
                 positions = [finger_positions[f][0] for f in sequence]
                 if self._is_crossing_movement(positions):
                     count += 1
-        return float(count)
+        return 1 + float(count)
 
     def _calc_half_scissor_double(self, chord: ChordData) -> float:
         """Calculate cost for half scissor movement between two fingers"""
@@ -232,7 +231,7 @@ class StandaloneMetricCalculator:
                         and key2.vertical_distance_to_resting_position > 0
                     ):
                         count += 1
-        return float(count)
+        return 1 + float(count)
 
     def _calc_horizontal_stretch_double(self, chord: ChordData) -> float:
         """Calculate cost for horizontal stretching between two fingers"""
@@ -246,17 +245,17 @@ class StandaloneMetricCalculator:
                     )
                     if stretch >= 2:  # Only count significant stretches
                         max_stretch = max(max_stretch, stretch)
-        return float(max_stretch)
+        return 1 + float(max_stretch)
 
     def _calc_pinky_ring_scissor(self, chord: ChordData) -> float:
         """Calculate cost for scissor movement between pinky and ring fingers"""
-        return self._calc_specific_finger_scissor(
+        return 1 + self._calc_specific_finger_scissor(
             chord, [Finger.L_PINKY, Finger.L_RING, Finger.R_PINKY, Finger.R_RING]
         )
 
     def _calc_ring_index_scissor(self, chord: ChordData) -> float:
         """Calculate cost for scissor movement between ring and index fingers"""
-        return self._calc_specific_finger_scissor(
+        return 1 + self._calc_specific_finger_scissor(
             chord, [Finger.L_RING, Finger.L_INDEX, Finger.R_RING, Finger.R_INDEX]
         )
 
@@ -310,4 +309,4 @@ class StandaloneMetricCalculator:
                         and key2.vertical_distance_to_resting_position > 0
                     ):
                         count += 1
-        return float(count)
+        return 1 + float(count)

@@ -43,12 +43,14 @@ class StandaloneMetricType(Enum):
     """Types of metrics for standalone chord analysis"""
 
     CHORD_LENGTH = auto()
-    HORIZONTAL_STRETCH = auto()
     HORIZONTAL_PINCH = auto()
-    VERTICAL_STRETCH = auto()
+    HORIZONTAL_STRETCH = auto()
     VERTICAL_PINCH = auto()
-    DIAGONAL_STRETCH = auto()
-    DIAGONAL_PINCH = auto()
+    VERTICAL_STRETCH = auto()
+    DIAGONAL_DOWNWARD_PINCH = auto()
+    DIAGONAL_DOWNWARD_STRETCH = auto()
+    DIAGONAL_UPWARD_PINCH = auto()
+    DIAGONAL_UPWARD_STRETCH = auto()
     SAME_FINGER_DOUBLE_ADJACENT = auto()
     SAME_FINGER_DOUBLE_GAP = auto()
     SAME_FINGER_TRIPLE = auto()
