@@ -1,0 +1,103 @@
+# Generator Configuration
+active_layout: Nordrassil_Ergonomic_full
+active_corpus: brown
+active_tokens: MonkeyType_english_1k
+
+# File paths
+paths:
+  key_layouts_dir: data/keyLayouts
+  corpuses_dir: data/corpuses
+  tokens_dir: data/tokens
+  chords_dir: data/chords
+  debug_dir: data/debug
+  results_dir: data/results
+  cache_dir: data/cache
+  default_layout_file: data/keyLayouts/Nordrassil_Ergonomic_full.yaml
+  default_corpus_file: data/corpuses/brown.txt
+  default_tokens_file: data/tokens/MonkeyType_english_1k.json
+
+# Debugging options
+debug:
+  enabled: false
+  log_level: INFO
+  log_file: data/debug/chord_generator.log
+  print_cost_details: false
+  save_intermediate_results: false
+
+# Benchmarking options
+benchmark:
+  enabled: false
+  track_individual_metrics: false
+  visual_update_interval: 100
+
+# Chord generation parameters
+chord_generation:
+  min_letter_count: 2
+  max_letter_count: 6
+  allow_non_adjacent_keys: true
+
+# Corpus generation parameters
+corpus_generation:
+  sample_size: 1000
+  min_length: 50
+  max_length: 500
+  total_corpus_size: 5000000
+  categories:
+    forum: 0.3
+    subtitles: 0.2
+    scientific: 0.15
+    programming: 0.2
+    general: 0.15
+  api_keys:
+    opensubtitles: YOUR_OPENSUBTITLES_API_KEY
+    github: YOUR_GITHUB_API_KEY
+
+# Token analysis configuration
+token_analysis:
+  min_token_length: 1
+  max_token_length: 10
+  top_n_tokens: 1000
+  include_characters: true
+  include_character_ngrams: true
+  include_words: true
+  include_word_ngrams: true
+  use_parallel_processing: true
+
+# Chord assignment algorithm configuration
+chord_assignment:
+  algorithm: algorithm1
+  first_letter_unmatched_weight: 1.5
+  second_letter_unmatched_weight: 1.2
+  last_letter_unmatched_weight: 1.3
+  additional_letter_weight: 1.2
+  fallback_letter_weight: 1.5
+  vertical_stretch_weight: 1.4
+  vertical_pinch_weight: 1.2
+  horizontal_stretch_weight: 1.3
+  horizontal_pinch_weight: 1.2
+  diagonal_stretch_weight: 1.5
+  diagonal_pinch_weight: 1.3
+  same_finger_double_weight: 1.5
+  same_finger_triple_weight: 3.0
+  pinky_ring_stretch_weight: 2.0
+  ring_middle_scissor_weight: 1.8
+  middle_index_stretch_weight: 1.6
+
+# Metric weights (abbreviated for readability)
+standalone_weights:
+  CHORD_LENGTH: 1.0
+  HORIZONTAL_PINCH: 1.2
+  HORIZONTAL_STRETCH: 1.3
+  # ... other standalone weights
+
+assignment_weights:
+  FIRST_LETTER_UNMATCHED: 1.5
+  SECOND_LETTER_UNMATCHED: 1.2
+  LAST_LETTER_UNMATCHED: 1.3
+  PHONETIC_DISSIMILARITY: 1.1
+  EXTRA_LETTER: 1.2
+
+set_weights:
+  FINGER_UTILIZATION: 1.0
+  HAND_UTILIZATION: 1.0
+  CHORD_PATTERN_CONSISTENCY: 1.0

@@ -1,5 +1,9 @@
 # Artifacts
-data/output
+data/debug
+data/cache
+data/tokens
+data/chords
+data/assignments
 
 # OS-specific files
 .DS_Store
