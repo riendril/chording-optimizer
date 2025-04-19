@@ -273,7 +273,7 @@ def analyze_corpus(
     # Get keyboard layout configuration
     from src.common.layout import load_keyboard_layout
 
-    layout_path = config.paths.get_layout_path(config.active_layout)
+    layout_path = config.paths.get_layout_path(config.active_layout_file)
     layout_config = load_keyboard_layout(layout_path)
 
     if top_n is None:
@@ -517,21 +517,27 @@ def main():
             if show_progress:
                 print(f"Analyzing corpus from {corpus_path}...")
 
-            # Update active corpus in config if it's in the expected directory
-            if corpus_path.parent.name == config.paths.corpuses_dir.name:
-                config.active_corpus = corpus_path.stem
+            # Check if this is a filepath in the default corpus directory,
+            # and if so, set it as the active corpus for future reference
+            relative_to_corpus_dir = (
+                corpus_path.relative_to(config.paths.corpuses_dir)
+                if corpus_path.is_relative_to(config.paths.corpuses_dir)
+                else None
+            )
+            if relative_to_corpus_dir:
+                config.active_corpus_file = str(relative_to_corpus_dir)
         except Exception as e:
             print(f"Error reading file: {e}")
             sys.exit(1)
     else:
-        # Use default corpus from config
+        # Use active corpus file from config
         try:
-            corpus_path = config.paths.get_corpus_path(config.active_corpus)
+            corpus_path = config.paths.get_corpus_path(config.active_corpus_file)
             if show_progress:
-                print(f"Using default corpus from {corpus_path}...")
+                print(f"Using active corpus from {corpus_path}...")
             corpus = read_corpus_from_file(corpus_path)
         except Exception as e:
-            print(f"Error reading default corpus: {e}")
+            print(f"Error reading active corpus: {e}")
             print("Using sample text instead...")
             corpus = """
             The quick brown fox jumps over the lazy dog. The dog was not very happy about this.
@@ -548,7 +554,7 @@ def main():
     # Create token collection
     token_collection = create_token_collection(
         top_tokens,
-        name=f"tokens_{config.active_corpus}_{top_n}",
+        name=f"tokens_{Path(corpus_path).stem if 'corpus_path' in locals() else 'sample'}_{top_n}",
         source=str(corpus_path) if "corpus_path" in locals() else "sample_text",
     )
 
@@ -571,7 +577,7 @@ def main():
     # If no output file specified but not quiet, save to default location
     elif not args.quiet:
         try:
-            output_filename = f"{config.active_corpus}_tokens_{top_n}.json"
+            output_filename = f"{Path(corpus_path).stem if 'corpus_path' in locals() else 'sample'}_tokens_{top_n}.json"
             output_path = config.paths.tokens_dir / output_filename
             token_collection.save_to_file(output_path)
             print(f"\nResults saved to {output_path}")

@@ -36,24 +36,19 @@ class Paths:
     """Path configuration for input and output files"""
 
     # Base directories
-    base_dir: Path = Path(".")
-    data_dir: Path = Path("data")
+    base_dir: Path
+    data_dir: Path
 
     # Input directories
-    key_layouts_dir: Path = Path("data/keyLayouts")
-    corpuses_dir: Path = Path("data/corpuses")
-    tokens_dir: Path = Path("data/tokens")
+    key_layouts_dir: Path
+    corpuses_dir: Path
+    tokens_dir: Path
 
     # Output directories
-    chords_dir: Path = Path("data/chords")
-    debug_dir: Path = Path("data/debug")
-    results_dir: Path = Path("data/results")
-    cache_dir: Path = Path("data/cache")  # Added for corpus generator
-
-    # Default files
-    default_layout_file: Path = Path("data/keyLayouts/Nordrassil_Ergonomic.yaml")
-    default_corpus_file: Path = Path("data/corpuses/brown.txt")
-    default_tokens_file: Path = Path("data/tokens/MonkeyType_english_1k.json")
+    chords_dir: Path
+    debug_dir: Path
+    results_dir: Path
+    cache_dir: Path
 
     def __post_init__(self):
         """Create directories if they don't exist"""
@@ -65,203 +60,133 @@ class Paths:
             self.chords_dir,
             self.debug_dir,
             self.results_dir,
-            self.cache_dir,  # Added for corpus generator
+            self.cache_dir,
         ]:
             os.makedirs(dir_path, exist_ok=True)
 
-    def get_layout_path(self, layout_name: Optional[str] = None) -> Path:
-        """Get path to a specific layout file or default"""
-        if layout_name:
-            # Check for .yaml extension first
-            yaml_path = self.key_layouts_dir / f"{layout_name}.yaml"
-            if yaml_path.exists():
-                return yaml_path
+    def get_layout_path(self, layout_file: str) -> Path:
+        """Get path to a specific layout file"""
+        layout_path = self.key_layouts_dir / layout_file
+        if not layout_path.exists():
+            raise ValueError(f"Layout file not found: {layout_path}")
+        return layout_path
 
-            # Try .layout extension for backward compatibility
-            layout_path = self.key_layouts_dir / f"{layout_name}.layout"
-            if layout_path.exists():
-                return layout_path
+    def get_corpus_path(self, corpus_file: str) -> Path:
+        """Get path to a specific corpus file"""
+        corpus_path = self.corpuses_dir / corpus_file
+        if not corpus_path.exists():
+            raise ValueError(f"Corpus file not found: {corpus_path}")
+        return corpus_path
 
-        return self.default_layout_file
+    def get_tokens_path(self, tokens_file: str) -> Path:
+        """Get path to a specific tokens file"""
+        tokens_path = self.tokens_dir / tokens_file
+        if not tokens_path.exists():
+            raise ValueError(f"Tokens file not found: {tokens_path}")
+        return tokens_path
 
-    def get_corpus_path(self, corpus_name: Optional[str] = None) -> Path:
-        """Get path to a specific corpus file or default"""
-        if corpus_name:
-            return self.corpuses_dir / f"{corpus_name}.txt"
-        return self.default_corpus_file
-
-    def get_tokens_path(self, tokens_name: Optional[str] = None) -> Path:
-        """Get path to a specific tokens file or default"""
-        if tokens_name:
-            return self.tokens_dir / f"{tokens_name}.json"
-        return self.default_tokens_file
+    def get_log_path(self, log_file: str) -> Path:
+        """Get path for a log file"""
+        return self.debug_dir / log_file
 
 
 @dataclass
 class DebugOptions:
     """Debug and logging options"""
 
-    enabled: bool = False
-    log_level: LogLevel = LogLevel.INFO
-    log_file: Optional[Path] = Path("data/debug/chord_generator.log")
-    print_cost_details: bool = False
-    save_intermediate_results: bool = False
+    enabled: bool
+    log_level: LogLevel
+    log_file: Optional[str]  # Just the filename, not the full path
+    print_cost_details: bool
+    save_intermediate_results: bool
 
 
 @dataclass
 class BenchmarkOptions:
     """Performance benchmarking configuration"""
 
-    enabled: bool = False
-    track_individual_metrics: bool = False
-    visual_update_interval: int = 100
+    enabled: bool
+    track_individual_metrics: bool
+    visual_update_interval: int
 
 
 @dataclass
 class ChordGeneration:
     """Chord generation parameters"""
 
-    min_letter_count: int = 2
-    max_letter_count: int = 6
-    allow_non_adjacent_keys: bool = True
+    min_letter_count: int
+    max_letter_count: int
+    allow_non_adjacent_keys: bool
 
 
 @dataclass
 class CorpusGenerationConfig:
     """Corpus generation parameters"""
 
-    sample_size: int = 1000
-    min_length: int = 50
-    max_length: int = 500
-    total_corpus_size: int = 5000000
-    categories: Dict[str, float] = field(
-        default_factory=lambda: {
-            "forum": 0.3,
-            "subtitles": 0.2,
-            "scientific": 0.15,
-            "programming": 0.2,
-            "general": 0.15,
-        }
-    )
-    api_keys: Dict[str, str] = field(
-        default_factory=lambda: {
-            "opensubtitles": "YOUR_OPENSUBTITLES_API_KEY",
-            "github": "YOUR_GITHUB_API_KEY",
-        }
-    )
+    sample_size: int
+    min_length: int
+    max_length: int
+    total_corpus_size: int
+    categories: Dict[str, float]
+    api_keys: Dict[str, str]
 
 
 @dataclass
 class StandaloneWeights:
     """Weights for standalone metrics"""
 
-    weights: Dict[StandaloneMetricType, float] = field(default_factory=dict)
-
-    def __post_init__(self):
-        """Set default weights if not provided"""
-        defaults = {
-            StandaloneMetricType.CHORD_LENGTH: 1.0,
-            StandaloneMetricType.HORIZONTAL_PINCH: 1.2,
-            StandaloneMetricType.HORIZONTAL_STRETCH: 1.3,
-            StandaloneMetricType.VERTICAL_PINCH: 1.2,
-            StandaloneMetricType.VERTICAL_STRETCH: 1.4,
-            StandaloneMetricType.DIAGONAL_DOWNWARD_PINCH: 1.3,
-            StandaloneMetricType.DIAGONAL_DOWNWARD_STRETCH: 1.5,
-            StandaloneMetricType.DIAGONAL_UPWARD_PINCH: 1.3,
-            StandaloneMetricType.DIAGONAL_UPWARD_STRETCH: 1.5,
-            StandaloneMetricType.SAME_FINGER_DOUBLE_ADJACENT: 1.5,
-            StandaloneMetricType.SAME_FINGER_DOUBLE_GAP: 2.0,
-            StandaloneMetricType.SAME_FINGER_TRIPLE: 3.0,
-            StandaloneMetricType.FULL_SCISSOR_DOUBLE: 1.7,
-            StandaloneMetricType.FULL_SCISSOR_TRIPLE: 2.5,
-            StandaloneMetricType.FULL_SCISSOR_QUADRUPLE: 3.0,
-            StandaloneMetricType.FULL_SCISSOR_QUINTUPLE: 4.0,
-            StandaloneMetricType.HALF_SCISSOR_DOUBLE: 1.5,
-            StandaloneMetricType.HORIZONTAL_STRETCH_DOUBLE: 1.6,
-            StandaloneMetricType.PINKY_RING_SCISSOR: 2.0,
-            StandaloneMetricType.RING_INDEX_SCISSOR: 1.8,
-        }
-
-        for metric, weight in defaults.items():
-            if metric not in self.weights:
-                self.weights[metric] = weight
+    weights: Dict[StandaloneMetricType, float]
 
 
 @dataclass
 class AssignmentWeights:
     """Weights for assignment metrics"""
 
-    weights: Dict[AssignmentMetricType, float] = field(default_factory=dict)
-
-    def __post_init__(self):
-        """Set default weights if not provided"""
-        defaults = {
-            AssignmentMetricType.FIRST_LETTER_UNMATCHED: 1.5,
-            AssignmentMetricType.SECOND_LETTER_UNMATCHED: 1.2,
-            AssignmentMetricType.LAST_LETTER_UNMATCHED: 1.3,
-            AssignmentMetricType.PHONETIC_DISSIMILARITY: 1.1,
-            AssignmentMetricType.EXTRA_LETTER: 1.2,
-        }
-
-        for metric, weight in defaults.items():
-            if metric not in self.weights:
-                self.weights[metric] = weight
+    weights: Dict[AssignmentMetricType, float]
 
 
 @dataclass
 class SetWeights:
     """Weights for set metrics"""
 
-    weights: Dict[SetMetricType, float] = field(default_factory=dict)
-
-    def __post_init__(self):
-        """Set default weights if not provided"""
-        defaults = {
-            SetMetricType.FINGER_UTILIZATION: 1.0,
-            SetMetricType.HAND_UTILIZATION: 1.0,
-            SetMetricType.CHORD_PATTERN_CONSISTENCY: 1.0,
-        }
-
-        for metric, weight in defaults.items():
-            if metric not in self.weights:
-                self.weights[metric] = weight
+    weights: Dict[SetMetricType, float]
 
 
 @dataclass
 class TokenAnalysisConfig:
     """Configuration for token analysis"""
 
-    min_token_length: int = 1
-    max_token_length: int = 10
-    top_n_tokens: int = 1000
-    include_characters: bool = True
-    include_character_ngrams: bool = True
-    include_words: bool = True
-    include_word_ngrams: bool = True
-    use_parallel_processing: bool = True
+    min_token_length: int
+    max_token_length: int
+    top_n_tokens: int
+    include_characters: bool
+    include_character_ngrams: bool
+    include_words: bool
+    include_word_ngrams: bool
+    use_parallel_processing: bool
 
 
 @dataclass
 class ChordAssignmentConfig:
     """Configuration for chord assignment algorithms"""
 
-    algorithm: str = "algorithm1"
-    first_letter_unmatched_weight: float = 1.5
-    second_letter_unmatched_weight: float = 1.2
-    last_letter_unmatched_weight: float = 1.3
-    additional_letter_weight: float = 1.2
-    fallback_letter_weight: float = 1.5
-    vertical_stretch_weight: float = 1.4
-    vertical_pinch_weight: float = 1.2
-    horizontal_stretch_weight: float = 1.3
-    horizontal_pinch_weight: float = 1.2
-    diagonal_stretch_weight: float = 1.5
-    diagonal_pinch_weight: float = 1.3
-    same_finger_double_weight: float = 1.5
-    same_finger_triple_weight: float = 3.0
-    pinky_ring_stretch_weight: float = 2.0
-    ring_middle_scissor_weight: float = 1.8
-    middle_index_stretch_weight: float = 1.6
+    algorithm: str
+    first_letter_unmatched_weight: float
+    second_letter_unmatched_weight: float
+    last_letter_unmatched_weight: float
+    additional_letter_weight: float
+    fallback_letter_weight: float
+    vertical_stretch_weight: float
+    vertical_pinch_weight: float
+    horizontal_stretch_weight: float
+    horizontal_pinch_weight: float
+    diagonal_stretch_weight: float
+    diagonal_pinch_weight: float
+    same_finger_double_weight: float
+    same_finger_triple_weight: float
+    pinky_ring_stretch_weight: float
+    ring_middle_scissor_weight: float
+    middle_index_stretch_weight: float
 
 
 @dataclass
@@ -269,31 +194,27 @@ class GeneratorConfig:
     """Main configuration for the chord generator"""
 
     # Core components
-    paths: Paths = field(default_factory=Paths)
-    debug: DebugOptions = field(default_factory=DebugOptions)
-    benchmark: BenchmarkOptions = field(default_factory=BenchmarkOptions)
+    paths: Paths
+    debug: DebugOptions
+    benchmark: BenchmarkOptions
 
     # Generation parameters
-    chord_generation: ChordGeneration = field(default_factory=ChordGeneration)
-    corpus_generation: CorpusGenerationConfig = field(
-        default_factory=CorpusGenerationConfig
-    )
+    chord_generation: ChordGeneration
+    corpus_generation: CorpusGenerationConfig
 
     # Weights
-    standalone_weights: StandaloneWeights = field(default_factory=StandaloneWeights)
-    assignment_weights: AssignmentWeights = field(default_factory=AssignmentWeights)
-    set_weights: SetWeights = field(default_factory=SetWeights)
+    standalone_weights: StandaloneWeights
+    assignment_weights: AssignmentWeights
+    set_weights: SetWeights
 
     # Module-specific configs
-    token_analysis: TokenAnalysisConfig = field(default_factory=TokenAnalysisConfig)
-    chord_assignment: ChordAssignmentConfig = field(
-        default_factory=ChordAssignmentConfig
-    )
+    token_analysis: TokenAnalysisConfig
+    chord_assignment: ChordAssignmentConfig
 
-    # Current active settings
-    active_layout: str = "norddrassil_ergonomic"
-    active_corpus: str = "brown"
-    active_tokens: str = "MonkeyType_english_1k"
+    # Current active settings - these are explicitly required with file extensions
+    active_layout_file: str
+    active_corpus_file: str
+    active_tokens_file: str
 
     @classmethod
     def load_config(
@@ -317,10 +238,7 @@ class GeneratorConfig:
         config_path = Path(config_path)
 
         if not config_path.exists():
-            # If no config file exists, create default config
-            config = cls()
-            config.save_config(config_path)
-            return config
+            raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
         with open(config_path, "r", encoding="utf-8") as f:
             config_data = yaml.safe_load(f)
@@ -331,119 +249,189 @@ class GeneratorConfig:
     @classmethod
     def _from_dict(cls, data: Dict[str, Any]) -> "GeneratorConfig":
         """Create config from dictionary"""
-        config = cls()
+        # Check for required top-level sections
+        required_sections = [
+            "paths",
+            "debug",
+            "benchmark",
+            "chord_generation",
+            "corpus_generation",
+            "standalone_weights",
+            "assignment_weights",
+            "set_weights",
+            "token_analysis",
+            "chord_assignment",
+            "active_layout_file",
+            "active_corpus_file",
+            "active_tokens_file",
+        ]
 
-        # Parse paths
-        if "paths" in data:
-            for key, value in data["paths"].items():
-                if hasattr(config.paths, key):
-                    setattr(config.paths, key, Path(value))
+        for section in required_sections:
+            if section not in data:
+                raise ValueError(f"Missing required configuration section: {section}")
+
+        # Parse paths section
+        paths_data = data["paths"]
+        required_path_fields = [
+            "base_dir",
+            "data_dir",
+            "key_layouts_dir",
+            "corpuses_dir",
+            "tokens_dir",
+            "chords_dir",
+            "debug_dir",
+            "results_dir",
+            "cache_dir",
+        ]
+        for field in required_path_fields:
+            if field not in paths_data:
+                raise ValueError(f"Missing required path field: {field}")
+
+        paths = Paths(
+            base_dir=Path(paths_data["base_dir"]),
+            data_dir=Path(paths_data["data_dir"]),
+            key_layouts_dir=Path(paths_data["key_layouts_dir"]),
+            corpuses_dir=Path(paths_data["corpuses_dir"]),
+            tokens_dir=Path(paths_data["tokens_dir"]),
+            chords_dir=Path(paths_data["chords_dir"]),
+            debug_dir=Path(paths_data["debug_dir"]),
+            results_dir=Path(paths_data["results_dir"]),
+            cache_dir=Path(paths_data["cache_dir"]),
+        )
 
         # Parse debug options
-        if "debug" in data:
-            debug_data = data["debug"]
-            if "enabled" in debug_data:
-                config.debug.enabled = debug_data["enabled"]
-            if "log_level" in debug_data:
-                config.debug.log_level = LogLevel[debug_data["log_level"]]
-            if "log_file" in debug_data:
-                config.debug.log_file = Path(debug_data["log_file"])
-            if "print_cost_details" in debug_data:
-                config.debug.print_cost_details = debug_data["print_cost_details"]
-            if "save_intermediate_results" in debug_data:
-                config.debug.save_intermediate_results = debug_data[
-                    "save_intermediate_results"
-                ]
+        debug_data = data["debug"]
+        debug = DebugOptions(
+            enabled=debug_data["enabled"],
+            log_level=LogLevel[debug_data["log_level"]],
+            log_file=debug_data.get("log_file"),
+            print_cost_details=debug_data["print_cost_details"],
+            save_intermediate_results=debug_data["save_intermediate_results"],
+        )
 
         # Parse benchmark options
-        if "benchmark" in data:
-            bench_data = data["benchmark"]
-            if "enabled" in bench_data:
-                config.benchmark.enabled = bench_data["enabled"]
-            if "track_individual_metrics" in bench_data:
-                config.benchmark.track_individual_metrics = bench_data[
-                    "track_individual_metrics"
-                ]
-            if "visual_update_interval" in bench_data:
-                config.benchmark.visual_update_interval = bench_data[
-                    "visual_update_interval"
-                ]
+        bench_data = data["benchmark"]
+        benchmark = BenchmarkOptions(
+            enabled=bench_data["enabled"],
+            track_individual_metrics=bench_data["track_individual_metrics"],
+            visual_update_interval=bench_data["visual_update_interval"],
+        )
 
         # Parse chord generation
-        if "chord_generation" in data:
-            gen_data = data["chord_generation"]
-            if "min_letter_count" in gen_data:
-                config.chord_generation.min_letter_count = gen_data["min_letter_count"]
-            if "max_letter_count" in gen_data:
-                config.chord_generation.max_letter_count = gen_data["max_letter_count"]
-            if "allow_non_adjacent_keys" in gen_data:
-                config.chord_generation.allow_non_adjacent_keys = gen_data[
-                    "allow_non_adjacent_keys"
-                ]
+        gen_data = data["chord_generation"]
+        chord_generation = ChordGeneration(
+            min_letter_count=gen_data["min_letter_count"],
+            max_letter_count=gen_data["max_letter_count"],
+            allow_non_adjacent_keys=gen_data["allow_non_adjacent_keys"],
+        )
 
         # Parse corpus generation
-        if "corpus_generation" in data:
-            corpus_data = data["corpus_generation"]
-            if "sample_size" in corpus_data:
-                config.corpus_generation.sample_size = corpus_data["sample_size"]
-            if "min_length" in corpus_data:
-                config.corpus_generation.min_length = corpus_data["min_length"]
-            if "max_length" in corpus_data:
-                config.corpus_generation.max_length = corpus_data["max_length"]
-            if "total_corpus_size" in corpus_data:
-                config.corpus_generation.total_corpus_size = corpus_data[
-                    "total_corpus_size"
-                ]
-            if "categories" in corpus_data:
-                config.corpus_generation.categories = corpus_data["categories"]
-            if "api_keys" in corpus_data:
-                config.corpus_generation.api_keys = corpus_data["api_keys"]
+        corpus_data = data["corpus_generation"]
+        corpus_generation = CorpusGenerationConfig(
+            sample_size=corpus_data["sample_size"],
+            min_length=corpus_data["min_length"],
+            max_length=corpus_data["max_length"],
+            total_corpus_size=corpus_data["total_corpus_size"],
+            categories=corpus_data["categories"],
+            api_keys=corpus_data["api_keys"],
+        )
 
-        # Parse weights (we'll implement a simpler version for brevity)
-        if "standalone_weights" in data:
-            for key, value in data["standalone_weights"].items():
-                metric_type = StandaloneMetricType[key]
-                config.standalone_weights.weights[metric_type] = float(value)
+        # Parse standalone weights
+        standalone_weights_data = data["standalone_weights"]
+        standalone_weights = StandaloneWeights(
+            weights={
+                StandaloneMetricType[key]: float(value)
+                for key, value in standalone_weights_data.items()
+            }
+        )
 
-        if "assignment_weights" in data:
-            for key, value in data["assignment_weights"].items():
-                metric_type = AssignmentMetricType[key]
-                config.assignment_weights.weights[metric_type] = float(value)
+        # Parse assignment weights
+        assignment_weights_data = data["assignment_weights"]
+        assignment_weights = AssignmentWeights(
+            weights={
+                AssignmentMetricType[key]: float(value)
+                for key, value in assignment_weights_data.items()
+            }
+        )
 
-        if "set_weights" in data:
-            for key, value in data["set_weights"].items():
-                metric_type = SetMetricType[key]
-                config.set_weights.weights[metric_type] = float(value)
+        # Parse set weights
+        set_weights_data = data["set_weights"]
+        set_weights = SetWeights(
+            weights={
+                SetMetricType[key]: float(value)
+                for key, value in set_weights_data.items()
+            }
+        )
 
         # Parse token analysis config
-        if "token_analysis" in data:
-            token_data = data["token_analysis"]
-            for key, value in token_data.items():
-                if hasattr(config.token_analysis, key):
-                    setattr(config.token_analysis, key, value)
+        token_data = data["token_analysis"]
+        token_analysis = TokenAnalysisConfig(
+            min_token_length=token_data["min_token_length"],
+            max_token_length=token_data["max_token_length"],
+            top_n_tokens=token_data["top_n_tokens"],
+            include_characters=token_data["include_characters"],
+            include_character_ngrams=token_data["include_character_ngrams"],
+            include_words=token_data["include_words"],
+            include_word_ngrams=token_data["include_word_ngrams"],
+            use_parallel_processing=token_data["use_parallel_processing"],
+        )
 
         # Parse chord assignment config
-        if "chord_assignment" in data:
-            assign_data = data["chord_assignment"]
-            for key, value in assign_data.items():
-                if hasattr(config.chord_assignment, key):
-                    setattr(config.chord_assignment, key, value)
+        assign_data = data["chord_assignment"]
+        chord_assignment = ChordAssignmentConfig(
+            algorithm=assign_data["algorithm"],
+            first_letter_unmatched_weight=assign_data["first_letter_unmatched_weight"],
+            second_letter_unmatched_weight=assign_data[
+                "second_letter_unmatched_weight"
+            ],
+            last_letter_unmatched_weight=assign_data["last_letter_unmatched_weight"],
+            additional_letter_weight=assign_data["additional_letter_weight"],
+            fallback_letter_weight=assign_data["fallback_letter_weight"],
+            vertical_stretch_weight=assign_data["vertical_stretch_weight"],
+            vertical_pinch_weight=assign_data["vertical_pinch_weight"],
+            horizontal_stretch_weight=assign_data["horizontal_stretch_weight"],
+            horizontal_pinch_weight=assign_data["horizontal_pinch_weight"],
+            diagonal_stretch_weight=assign_data["diagonal_stretch_weight"],
+            diagonal_pinch_weight=assign_data["diagonal_pinch_weight"],
+            same_finger_double_weight=assign_data["same_finger_double_weight"],
+            same_finger_triple_weight=assign_data["same_finger_triple_weight"],
+            pinky_ring_stretch_weight=assign_data["pinky_ring_stretch_weight"],
+            ring_middle_scissor_weight=assign_data["ring_middle_scissor_weight"],
+            middle_index_stretch_weight=assign_data["middle_index_stretch_weight"],
+        )
 
-        # Active settings
-        if "active_layout" in data:
-            config.active_layout = data["active_layout"]
-        if "active_corpus" in data:
-            config.active_corpus = data["active_corpus"]
-        if "active_tokens" in data:
-            config.active_tokens = data["active_tokens"]
+        # Get active settings with file extensions
+        active_layout_file = data["active_layout_file"]
+        active_corpus_file = data["active_corpus_file"]
+        active_tokens_file = data["active_tokens_file"]
 
-        return config
+        # Build the complete config
+        return cls(
+            paths=paths,
+            debug=debug,
+            benchmark=benchmark,
+            chord_generation=chord_generation,
+            corpus_generation=corpus_generation,
+            standalone_weights=standalone_weights,
+            assignment_weights=assignment_weights,
+            set_weights=set_weights,
+            token_analysis=token_analysis,
+            chord_assignment=chord_assignment,
+            active_layout_file=active_layout_file,
+            active_corpus_file=active_corpus_file,
+            active_tokens_file=active_tokens_file,
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary for YAML serialization"""
         # Create a dictionary with all configuration sections
         result = {
+            "active_layout_file": self.active_layout_file,
+            "active_corpus_file": self.active_corpus_file,
+            "active_tokens_file": self.active_tokens_file,
             "paths": {
+                "base_dir": str(self.paths.base_dir),
+                "data_dir": str(self.paths.data_dir),
                 "key_layouts_dir": str(self.paths.key_layouts_dir),
                 "corpuses_dir": str(self.paths.corpuses_dir),
                 "tokens_dir": str(self.paths.tokens_dir),
@@ -451,14 +439,11 @@ class GeneratorConfig:
                 "debug_dir": str(self.paths.debug_dir),
                 "results_dir": str(self.paths.results_dir),
                 "cache_dir": str(self.paths.cache_dir),
-                "default_layout_file": str(self.paths.default_layout_file),
-                "default_corpus_file": str(self.paths.default_corpus_file),
-                "default_tokens_file": str(self.paths.default_tokens_file),
             },
             "debug": {
                 "enabled": self.debug.enabled,
                 "log_level": self.debug.log_level.name,
-                "log_file": str(self.debug.log_file) if self.debug.log_file else None,
+                "log_file": self.debug.log_file,
                 "print_cost_details": self.debug.print_cost_details,
                 "save_intermediate_results": self.debug.save_intermediate_results,
             },
@@ -521,9 +506,6 @@ class GeneratorConfig:
                 "ring_middle_scissor_weight": self.chord_assignment.ring_middle_scissor_weight,
                 "middle_index_stretch_weight": self.chord_assignment.middle_index_stretch_weight,
             },
-            "active_layout": self.active_layout,
-            "active_corpus": self.active_corpus,
-            "active_tokens": self.active_tokens,
         }
         return result
 
@@ -546,14 +528,15 @@ class GeneratorConfig:
 
         # Ensure log directory exists
         if self.debug.log_file:
-            log_dir = self.debug.log_file.parent
+            log_path = self.paths.get_log_path(self.debug.log_file)
+            log_dir = log_path.parent
             os.makedirs(log_dir, exist_ok=True)
 
             logging.basicConfig(
                 level=self.debug.log_level.value,
                 format=log_format,
                 handlers=[
-                    logging.FileHandler(self.debug.log_file),
+                    logging.FileHandler(log_path),
                     logging.StreamHandler(),
                 ],
             )
@@ -601,13 +584,18 @@ class GeneratorConfig:
         if sum(self.corpus_generation.categories.values()) <= 0:
             raise ValueError("sum of category weights must be positive")
 
-        # Validate paths
-        if not self.paths.default_layout_file.exists():
-            raise ValueError(
-                f"Default layout file does not exist: {self.paths.default_layout_file}"
-            )
+        # Validate active settings by checking that the referenced files exist
+        try:
+            self.paths.get_layout_path(self.active_layout_file)
+        except Exception as e:
+            raise ValueError(f"Invalid active_layout_file: {e}")
 
-        # Check active layout file exists
-        layout_path = self.paths.get_layout_path(self.active_layout)
-        if not layout_path.exists():
-            raise ValueError(f"Active layout file does not exist: {layout_path}")
+        try:
+            self.paths.get_corpus_path(self.active_corpus_file)
+        except Exception as e:
+            raise ValueError(f"Invalid active_corpus_file: {e}")
+
+        try:
+            self.paths.get_tokens_path(self.active_tokens_file)
+        except Exception as e:
+            raise ValueError(f"Invalid active_tokens_file: {e}")
