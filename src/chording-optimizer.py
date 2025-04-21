@@ -1,8 +1,7 @@
 """
 Token optimizer for chord system optimization.
 
-This module integrates token extraction, scoring, and selection to
-optimize token collections for chord assignment.
+This module orchestrates the pipeline
 """
 
 import argparse
@@ -11,21 +10,19 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
+from src.analyzing.token_scoring import (
+    get_score_recalculation_function,
+    score_token_collection,
+)
+from src.assignment.token_selection import save_selected_tokens, select_tokens
 from src.common.config import GeneratorConfig
 from src.common.layout import load_keyboard_layout
 from src.common.shared_types import ChordData, ContextInfo, TokenCollection, TokenData
-
-# Import our new modules
 from src.token_generation.token_extraction import (
     create_token_collection_with_context,
     extract_tokens_with_context,
     read_corpus_from_file,
 )
-from src.token_generation.token_scoring import (
-    get_score_recalculation_function,
-    score_token_collection,
-)
-from src.token_generation.token_selection import save_selected_tokens, select_tokens
 
 # Configure logging
 logging.basicConfig(
