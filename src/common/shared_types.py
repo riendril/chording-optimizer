@@ -7,6 +7,21 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 
+class Finger(Enum):
+    """Enum for fingers that can be assigned to keys"""
+
+    L_PINKY = auto()
+    L_RING = auto()
+    L_MIDDLE = auto()
+    L_INDEX = auto()
+    L_THUMB = auto()
+    R_THUMB = auto()
+    R_INDEX = auto()
+    R_MIDDLE = auto()
+    R_RING = auto()
+    R_PINKY = auto()
+
+
 @dataclass
 class KeyPosition:
     """Position and finger assignment of a key on the input device"""
@@ -47,31 +62,16 @@ class KeyPosition:
         )
 
 
-class Finger(Enum):
-    """Enum for fingers that can be assigned to keys"""
-
-    L_PINKY = auto()
-    L_RING = auto()
-    L_MIDDLE = auto()
-    L_INDEX = auto()
-    L_THUMB = auto()
-    R_THUMB = auto()
-    R_INDEX = auto()
-    R_MIDDLE = auto()
-    R_RING = auto()
-    R_PINKY = auto()
-
-
 @dataclass
-class WordData:
-    """Represents preprocessed data for a word"""
+class TokenData:
+    """Represents preprocessed data for a token"""
 
     original: str
     lower: str
     length: int
     zipf_weight: float
-    frequency: int = 0  # Added for word frequency count
-    rank: int = 0  # Added for word frequency rank
+    frequency: int = 0  # Added for token frequency count
+    rank: int = 0  # Added for token frequency rank
     score: float = 0.0  # Added for token score
     difficulty: float = 0.0  # Added for typing difficulty
 
@@ -89,7 +89,7 @@ class WordData:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "WordData":
+    def from_dict(cls, data: Dict[str, Any]) -> "TokenData":
         """Create from dictionary after JSON deserialization"""
         return cls(
             original=data["original"],
@@ -103,26 +103,105 @@ class WordData:
         )
 
     @classmethod
-    def from_word(
+    def from_token(
         cls,
-        word: str,
+        token: str,
         frequency: int = 0,
         rank: int = 0,
         zipf_weight: float = 0.0,
         score: float = 0.0,
         difficulty: float = 0.0,
-    ) -> "WordData":
-        """Create from a word string with optional frequency information"""
+    ) -> "TokenData":
+        """Create from a token string with optional frequency information"""
         return cls(
-            original=word,
-            lower=word.lower(),
-            length=len(word),
+            original=token,
+            lower=token.lower(),
+            length=len(token),
             zipf_weight=zipf_weight,
             frequency=frequency,
             rank=rank,
             score=score,
             difficulty=difficulty,
         )
+
+
+@dataclass
+class ContextInfo:
+    """Context information for tokens including relationships with other tokens"""
+
+    # Tokens that commonly precede this token with frequencies
+    preceding: Dict[str, int] = field(default_factory=dict)
+
+    # Tokens that commonly follow this token with frequencies
+    following: Dict[str, int] = field(default_factory=dict)
+
+    # Tokens that contain this token as a substring
+    is_substring_of: List[str] = field(default_factory=list)
+
+    # Tokens that are contained within this token
+    contains_substrings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for serialization"""
+        return {
+            "preceding": self.preceding,
+            "following": self.following,
+            "is_substring_of": self.is_substring_of,
+            "contains_substrings": self.contains_substrings,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "ContextInfo":
+        """Create from dictionary after deserialization"""
+        return cls(
+            preceding=data.get("preceding", {}),
+            following=data.get("following", {}),
+            is_substring_of=data.get("is_substring_of", []),
+            contains_substrings=data.get("contains_substrings", []),
+        )
+
+
+@dataclass
+class TokenCollection:
+    """Collection of tokens with frequency information"""
+
+    name: str
+    tokens: List[TokenData] = field(default_factory=list)
+    ordered_by_frequency: bool = True
+    source: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            "name": self.name,
+            "tokens": [token.to_dict() for token in self.tokens],
+            "orderedByFrequency": self.ordered_by_frequency,
+            "source": self.source,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TokenCollection":
+        """Create from dictionary after JSON deserialization"""
+        return cls(
+            name=data["name"],
+            tokens=[
+                TokenData.from_dict(token_data) for token_data in data.get("tokens", [])
+            ],
+            ordered_by_frequency=data.get("orderedByFrequency", True),
+            source=data.get("source"),
+        )
+
+    def save_to_file(self, file_path: Union[str, Path]) -> None:
+        """Save token collection to JSON file"""
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+
+    @classmethod
+    def load_from_file(cls, file_path: Union[str, Path]) -> "TokenCollection":
+        """Load token collection from JSON file"""
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return cls.from_dict(data)
 
 
 @dataclass
@@ -165,10 +244,61 @@ class ChordData:
 
 
 @dataclass
-class Assignment:
-    """Represents a word-chord assignment pair"""
+class ChordCollection:
+    """Collection of chords with their properties"""
 
-    word: WordData
+    name: str
+    min_length: int
+    max_length: int
+    chords: List[ChordData] = field(default_factory=list)
+    costs: Dict[str, Dict[str, float]] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            "name": self.name,
+            "min_length": self.min_length,
+            "max_length": self.max_length,
+            "chords": [chord.to_dict() for chord in self.chords],
+            "costs": self.costs,
+        }
+
+    @classmethod
+    def from_dict(
+        cls, data: Dict[str, Any], finger_enum: type = Finger
+    ) -> "ChordCollection":
+        """Create from dictionary after JSON deserialization"""
+        return cls(
+            name=data["name"],
+            min_length=data["min_length"],
+            max_length=data["max_length"],
+            chords=[
+                ChordData.from_dict(chord_data, finger_enum)
+                for chord_data in data.get("chords", [])
+            ],
+            costs=data.get("costs", {}),
+        )
+
+    def save_to_file(self, file_path: Union[str, Path]) -> None:
+        """Save chord collection to JSON file"""
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+
+    @classmethod
+    def load_from_file(
+        cls, file_path: Union[str, Path], finger_enum: type = Finger
+    ) -> "ChordCollection":
+        """Load chord collection from JSON file"""
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return cls.from_dict(data, finger_enum)
+
+
+@dataclass
+class Assignment:
+    """Represents a token-chord assignment pair"""
+
+    token: TokenData
     chord: ChordData
     score: float = 0.0
     metrics: Dict[str, float] = field(default_factory=dict)
@@ -176,7 +306,7 @@ class Assignment:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
-            "word": self.word.to_dict(),
+            "token": self.token.to_dict(),
             "chord": self.chord.to_dict(),
             "score": self.score,
             "metrics": self.metrics,
@@ -188,7 +318,7 @@ class Assignment:
     ) -> "Assignment":
         """Create from dictionary after JSON deserialization"""
         return cls(
-            word=WordData.from_dict(data["word"]),
+            token=TokenData.from_dict(data["token"]),
             chord=ChordData.from_dict(data["chord"], finger_enum),
             score=data.get("score", 0.0),
             metrics=data.get("metrics", {}),
@@ -197,7 +327,7 @@ class Assignment:
 
 @dataclass
 class AssignmentSet:
-    """Represents a set of assignments between words and chords"""
+    """Represents a set of assignments between tokens and chords"""
 
     name: str
     assignments: List[Assignment] = field(default_factory=list)
@@ -266,7 +396,7 @@ class StandaloneMetricType(Enum):
 
 
 class AssignmentMetricType(Enum):
-    """Types of metrics for word-chord assignments"""
+    """Types of metrics for token-chord assignments"""
 
     FIRST_LETTER_UNMATCHED = auto()
     SECOND_LETTER_UNMATCHED = auto()
@@ -281,97 +411,3 @@ class SetMetricType(Enum):
     FINGER_UTILIZATION = auto()
     HAND_UTILIZATION = auto()
     CHORD_PATTERN_CONSISTENCY = auto()
-
-
-@dataclass
-class TokenCollection:
-    """Collection of tokens with frequency information"""
-
-    name: str
-    tokens: List[WordData] = field(default_factory=list)
-    ordered_by_frequency: bool = True
-    source: Optional[str] = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            "name": self.name,
-            "tokens": [token.to_dict() for token in self.tokens],
-            "orderedByFrequency": self.ordered_by_frequency,
-            "source": self.source,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TokenCollection":
-        """Create from dictionary after JSON deserialization"""
-        return cls(
-            name=data["name"],
-            tokens=[
-                WordData.from_dict(token_data) for token_data in data.get("tokens", [])
-            ],
-            ordered_by_frequency=data.get("orderedByFrequency", True),
-            source=data.get("source"),
-        )
-
-    def save_to_file(self, file_path: Union[str, Path]) -> None:
-        """Save token collection to JSON file"""
-        with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
-
-    @classmethod
-    def load_from_file(cls, file_path: Union[str, Path]) -> "TokenCollection":
-        """Load token collection from JSON file"""
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return cls.from_dict(data)
-
-
-@dataclass
-class ChordCollection:
-    """Collection of chords with their properties"""
-
-    name: str
-    min_length: int
-    max_length: int
-    chords: List[ChordData] = field(default_factory=list)
-    costs: Dict[str, Dict[str, float]] = field(default_factory=dict)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            "name": self.name,
-            "min_length": self.min_length,
-            "max_length": self.max_length,
-            "chords": [chord.to_dict() for chord in self.chords],
-            "costs": self.costs,
-        }
-
-    @classmethod
-    def from_dict(
-        cls, data: Dict[str, Any], finger_enum: type = Finger
-    ) -> "ChordCollection":
-        """Create from dictionary after JSON deserialization"""
-        return cls(
-            name=data["name"],
-            min_length=data["min_length"],
-            max_length=data["max_length"],
-            chords=[
-                ChordData.from_dict(chord_data, finger_enum)
-                for chord_data in data.get("chords", [])
-            ],
-            costs=data.get("costs", {}),
-        )
-
-    def save_to_file(self, file_path: Union[str, Path]) -> None:
-        """Save chord collection to JSON file"""
-        with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
-
-    @classmethod
-    def load_from_file(
-        cls, file_path: Union[str, Path], finger_enum: type = Finger
-    ) -> "ChordCollection":
-        """Load chord collection from JSON file"""
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return cls.from_dict(data, finger_enum)

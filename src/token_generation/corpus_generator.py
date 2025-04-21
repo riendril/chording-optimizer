@@ -721,10 +721,10 @@ def sample_complete_text(text: str, min_length: int, max_length: int) -> str:
         if len(sampled_text) >= min_length:
             return sampled_text
 
-    # If all else fails, just take a substring making sure not to cut words
+    # If all else fails, just take a substring making sure not to cut tokens
     start_pos = random.randint(0, len(text) - max_length)
 
-    # Adjust to start at a word boundary
+    # Adjust to start at a token boundary
     if start_pos > 0:
         while start_pos < len(text) and not text[start_pos].isspace():
             start_pos += 1

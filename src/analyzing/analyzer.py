@@ -1,8 +1,8 @@
-"""Analyzer module for evaluating chord and word assignments.
+"""Analyzer module for evaluating chord and token assignments.
 
 This module can analyze both types of assignment files:
-1. Chord assignments (word -> chord mapping)
-2. Word assignments (chord -> word mapping)
+1. Chord assignments (token -> chord mapping)
+2. Token assignments (chord -> token mapping)
 
 Usage from command line:
     python -m src.assignment_analyzing.analyzer path/to/assignment.json
@@ -50,12 +50,12 @@ class ChordAnalyzer:
         }
 
     def analyze_assignment_file(self, input_path: Path) -> Dict:
-        """Analyze a chord or word assignment file and generate metrics.
+        """Analyze a chord or token assignment file and generate metrics.
 
         Args:
             input_path: Path to the assignment file. Can be either:
-                - Chord assignment file (word -> chord mapping)
-                - Word assignment file (chord -> word mapping)
+                - Chord assignment file (token -> chord mapping)
+                - Token assignment file (chord -> token mapping)
 
         Returns:
             Dictionary containing the analysis results
@@ -65,7 +65,7 @@ class ChordAnalyzer:
 
         if "chordAssignments" in assignments:
             is_chord_assignment = True
-        elif "wordAssignments" in assignments:
+        elif "tokenAssignments" in assignments:
             is_chord_assignment = False
         else:
             raise ValueError(
@@ -86,11 +86,11 @@ class ChordAnalyzer:
 
         Args:
             assignments: Dictionary containing the assignments
-            is_chord_assignment: If True, contains word->chord mappings
-                               If False, contains chord->word mappings
+            is_chord_assignment: If True, contains token->chord mappings
+                               If False, contains chord->token mappings
         """
         assignment_dict = assignments.get(
-            "chordAssignments" if is_chord_assignment else "wordAssignments", {}
+            "chordAssignments" if is_chord_assignment else "tokenAssignments", {}
         )
 
         # Calculate individual metrics
@@ -101,18 +101,18 @@ class ChordAnalyzer:
         for key, value in assignment_dict.items():
             if value is not None:
                 if is_chord_assignment:
-                    # key is word, value is chord
-                    word, chord = key, value
+                    # key is token, value is chord
+                    token, chord = key, value
                 else:
-                    # key is chord, value is word
-                    chord, word = key, value
+                    # key is chord, value is token
+                    chord, token = key, value
 
                 chord_metrics[chord] = self._calculate_chord_metrics(chord)
-                assignment_metrics[word] = self._calculate_assignment_metrics(
-                    word, chord
+                assignment_metrics[token] = self._calculate_assignment_metrics(
+                    token, chord
                 )
 
-        # TODO: make work with word / chord assignments
+        # TODO: make work with token / chord assignments
         # Calculate global metrics
         global_metrics = self._calculate_global_metrics(assignment_dict)
 
@@ -147,10 +147,10 @@ def analyze_assignments(
     config_file: Optional[Path] = None,
     output_dir: Optional[Path] = None,
 ) -> None:
-    """Analyze chord or word assignments and save results.
+    """Analyze chord or token assignments and save results.
 
     Args:
-        input_file: Path to the assignment file (either chord or word assignments)
+        input_file: Path to the assignment file (either chord or token assignments)
         config_file: Optional path to config file (default: generator.config)
         output_dir: Optional output directory (default: data/output/assignmentCosts)
     """
@@ -179,12 +179,12 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Analyze chord or word assignments and generate metrics"
+        description="Analyze chord or token assignments and generate metrics"
     )
     parser.add_argument(
         "input_file",
         type=Path,
-        help="Path to the assignment file (either chord or word assignments)",
+        help="Path to the assignment file (either chord or token assignments)",
     )
     parser.add_argument(
         "--config",

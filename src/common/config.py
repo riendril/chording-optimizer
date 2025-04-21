@@ -161,8 +161,8 @@ class TokenAnalysisConfig:
     top_n_tokens: int
     include_characters: bool
     include_character_ngrams: bool
-    include_words: bool
-    include_word_ngrams: bool
+    include_tokens: bool
+    include_token_ngrams: bool
     use_parallel_processing: bool
 
 
@@ -371,8 +371,8 @@ class GeneratorConfig:
             top_n_tokens=token_data["top_n_tokens"],
             include_characters=token_data["include_characters"],
             include_character_ngrams=token_data["include_character_ngrams"],
-            include_words=token_data["include_words"],
-            include_word_ngrams=token_data["include_word_ngrams"],
+            include_tokens=token_data["include_tokens"],
+            include_token_ngrams=token_data["include_token_ngrams"],
             use_parallel_processing=token_data["use_parallel_processing"],
         )
 
@@ -483,8 +483,8 @@ class GeneratorConfig:
                 "top_n_tokens": self.token_analysis.top_n_tokens,
                 "include_characters": self.token_analysis.include_characters,
                 "include_character_ngrams": self.token_analysis.include_character_ngrams,
-                "include_words": self.token_analysis.include_words,
-                "include_word_ngrams": self.token_analysis.include_word_ngrams,
+                "include_tokens": self.token_analysis.include_tokens,
+                "include_token_ngrams": self.token_analysis.include_token_ngrams,
                 "use_parallel_processing": self.token_analysis.use_parallel_processing,
             },
             "chord_assignment": {

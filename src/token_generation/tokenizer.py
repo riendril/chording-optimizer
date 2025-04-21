@@ -2,7 +2,7 @@
 Tokenizer for chord system optimization.
 
 This module analyzes text to identify tokens (characters, character n-grams,
-words, etc.) that would benefit most from chord assignments.
+tokens, etc.) that would benefit most from chord assignments.
 """
 
 import argparse
@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 import yaml
 
 from src.common.config import GeneratorConfig
-from src.common.shared_types import Finger, TokenCollection, WordData
+from src.common.shared_types import ContextInfo, Finger, TokenCollection, TokenData
 
 # -----------------
 # Text Preprocessing
@@ -44,21 +44,21 @@ def character_ngrams(text: str, n: int) -> Dict[str, int]:
     return Counter(text[i : i + n] for i in range(len(text) - n + 1))
 
 
-def words(text: str) -> Dict[str, int]:
-    """Extract words (no spaces) and their frequencies."""
+def tokens(text: str) -> Dict[str, int]:
+    """Extract tokens (no spaces) and their frequencies."""
     return Counter(re.findall(r"\b[\w\']+\b", text))
 
 
-def words_with_space(text: str) -> Dict[str, int]:
-    """Extract words with trailing space and their frequencies."""
+def tokens_with_space(text: str) -> Dict[str, int]:
+    """Extract tokens with trailing space and their frequencies."""
     return Counter(re.findall(r"\b[\w\']+\s", text))
 
 
-def word_ngrams(text: str, n: int) -> Dict[str, int]:
-    """Extract word n-grams and their frequencies."""
-    word_list = re.findall(r"\b[\w\']+\b", text)
+def token_ngrams(text: str, n: int) -> Dict[str, int]:
+    """Extract token n-grams and their frequencies."""
+    token_list = re.findall(r"\b[\w\']+\b", text)
     return Counter(
-        " ".join(word_list[i : i + n]) for i in range(len(word_list) - n + 1)
+        " ".join(token_list[i : i + n]) for i in range(len(token_list) - n + 1)
     )
 
 
@@ -105,17 +105,17 @@ def extract_tokens(text: str, config: GeneratorConfig) -> Dict[str, int]:
             ]
         )
 
-    # Add words if enabled
-    if token_config.include_words:
-        extractors.append(partial(words, processed_text))
-        extractors.append(partial(words_with_space, processed_text))
+    # Add tokens if enabled
+    if token_config.include_tokens:
+        extractors.append(partial(tokens, processed_text))
+        extractors.append(partial(tokens_with_space, processed_text))
 
-    # Add word n-grams if enabled
-    if token_config.include_word_ngrams:
+    # Add token n-grams if enabled
+    if token_config.include_token_ngrams:
         min_n = max(2, token_config.min_token_length)
-        max_n = min(4, token_config.max_token_length)  # Cap at 4 for word n-grams
+        max_n = min(4, token_config.max_token_length)  # Cap at 4 for token n-grams
         extractors.extend(
-            [partial(word_ngrams, processed_text, n) for n in range(min_n, max_n + 1)]
+            [partial(token_ngrams, processed_text, n) for n in range(min_n, max_n + 1)]
         )
 
     # Add punctuation patterns
@@ -365,15 +365,15 @@ def create_token_collection(
     tokens = []
 
     for i, token_data in enumerate(scored_tokens):
-        word_data = WordData.from_word(
-            word=token_data["token"],
+        token_data = TokenData.from_token(
+            token=token_data["token"],
             frequency=token_data["frequency"],
             rank=i,
             zipf_weight=1.0 / (i + 1),  # Simple Zipf approximation
             score=token_data["score"],
             difficulty=token_data["difficulty"],
         )
-        tokens.append(word_data)
+        tokens.append(token_data)
 
     return TokenCollection(
         name=name, tokens=tokens, ordered_by_frequency=True, source=source
@@ -415,7 +415,7 @@ Token Analyzer for Chording Keyboard Layout Optimization
 
 DESCRIPTION:
     This program analyzes text to identify tokens (characters, character n-grams, 
-    words, word n-grams) that would benefit most from chording on a custom keyboard layout.
+    tokens, token n-grams) that would benefit most from chording on a custom keyboard layout.
     It scores tokens based on typing difficulty, length, and frequency in the input text.
 
 USAGE:

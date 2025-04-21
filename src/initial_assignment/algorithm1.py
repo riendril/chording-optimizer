@@ -33,16 +33,16 @@ class FingerIndex(Enum):
 
 
 @dataclass
-class WordData:
-    """Store preprocessed word data to avoid repeated operations"""
+class TokenData:
+    """Store preprocessed token data to avoid repeated operations"""
 
     original: str
     lower: str
     length: int
 
     @classmethod
-    def from_word(cls, word: str) -> "WordData":
-        return cls(original=word, lower=word.lower(), length=len(word))
+    def from_token(cls, token: str) -> "TokenData":
+        return cls(original=token, lower=token.lower(), length=len(token))
 
 
 @dataclass
@@ -64,7 +64,7 @@ class OptimizationMetrics:
     first_last_usage: float
     fallback_assignments: int
     average_chord_length: float
-    single_letter_words: int
+    single_letter_tokens: int
 
 
 def profile_function(func):
@@ -153,43 +153,43 @@ def calculate_harmonic_number(n: int) -> float:
 
 
 # No cache needed since each rank is only used once
-def get_zipf_word_weight(rank: int, total_words: int) -> float:
+def get_zipf_token_weight(rank: int, total_tokens: int) -> float:
     """Calculate Zipf's law weight using proper harmonic normalization"""
-    if total_words <= 0:
-        raise ValueError("Total words must be positive")
-    h_n = calculate_harmonic_number(total_words)
+    if total_tokens <= 0:
+        raise ValueError("Total tokens must be positive")
+    h_n = calculate_harmonic_number(total_tokens)
     return 1.0 / ((rank + 1) * h_n)
 
 
 def calculate_assignment_cost(
-    word: WordData,
-    word_rank: int,
-    total_word_count: int,
+    token: TokenData,
+    token_rank: int,
+    total_token_count: int,
     suggested_chord: str,
     config: GeneratorConfig,
     fallback_iteration: int = 0,
 ) -> float:
     """Calculate weighted cost of a chord assignment based on config preferences"""
-    if word.length == 1:
+    if token.length == 1:
         return 0.0
 
-    zipf_word_weight = get_zipf_word_weight(word_rank, total_word_count)
+    zipf_token_weight = get_zipf_token_weight(token_rank, total_token_count)
 
     cost_factor = (
         config.additional_letter_weight ** len(suggested_chord)
         * (
             config.first_letter_unmatched_weight
-            if word.lower[0] not in suggested_chord
+            if token.lower[0] not in suggested_chord
             else 1
         )
         * (
             config.second_letter_unmatched_weight
-            if word.length > 1 and word.lower[1] not in suggested_chord
+            if token.length > 1 and token.lower[1] not in suggested_chord
             else 1
         )
         * (
             config.last_letter_unmatched_weight
-            if word.lower[-1] not in suggested_chord
+            if token.lower[-1] not in suggested_chord
             else 1
         )
         * (
@@ -198,14 +198,14 @@ def calculate_assignment_cost(
             else 1
         )
     )
-    return zipf_word_weight * cost_factor
+    return zipf_token_weight * cost_factor
 
 
 def generate_standard_chords(
-    word_data: WordData, unavailable_chords: Set[str], config: GeneratorConfig
+    token_data: TokenData, unavailable_chords: Set[str], config: GeneratorConfig
 ) -> List[str]:
-    """Generate all possible chords with letters from the word that are not yet in use"""
-    letters = set(word_data.lower)
+    """Generate all possible chords with letters from the token that are not yet in use"""
+    letters = set(token_data.lower)
     valid_combos: List[str] = []
 
     max_length = min(len(letters) + 1, config.max_letters + 1)
@@ -219,23 +219,23 @@ def generate_standard_chords(
     return valid_combos
 
 
-def get_letter_word_compatibility_cost(
+def get_letter_token_compatibility_cost(
     letter: str,
-    word_data: WordData,
+    token_data: TokenData,
     layout: Dict[str, LetterData],
     config: GeneratorConfig,
 ) -> float:
-    """Calculate compatibility cost of adding a letter to a word based on keyboard layout"""
+    """Calculate compatibility cost of adding a letter to a token based on keyboard layout"""
 
     letter_data = layout[letter]
     cost = 1.0
 
-    # Get fingers used in word and their positions
-    word_fingers = []
-    word_positions = []
-    for c in word_data.lower:
-        word_fingers.append(layout[c].finger)
-        word_positions.append(
+    # Get fingers used in token and their positions
+    token_fingers = []
+    token_positions = []
+    for c in token_data.lower:
+        token_fingers.append(layout[c].finger)
+        token_positions.append(
             (
                 layout[c].vertical_distance_to_home_row,
                 layout[c].horizontal_distance_to_home_row,
@@ -248,19 +248,19 @@ def get_letter_word_compatibility_cost(
         if abs(letter_data.vertical_distance_to_home_row) > 1:
             cost *= config.vertical_stretch_weight
         # Check for vertical pinches with previous letters
-        for pos in word_positions:
+        for pos in token_positions:
             if pos[0] != 0 and (pos[0] * letter_data.vertical_distance_to_home_row) < 0:
                 cost *= config.vertical_pinch_weight
 
     # Account for horizontal movements
     if letter_data.horizontal_distance_to_home_row != 0:
         # Check for horizontal stretches
-        if letter_data.finger_to_left in word_fingers:
+        if letter_data.finger_to_left in token_fingers:
             cost *= config.horizontal_stretch_weight
-        if letter_data.finger_to_right in word_fingers:
+        if letter_data.finger_to_right in token_fingers:
             cost *= config.horizontal_stretch_weight
         # Check for horizontal pinches
-        for pos in word_positions:
+        for pos in token_positions:
             if (
                 pos[1] != 0
                 and (pos[1] * letter_data.horizontal_distance_to_home_row) < 0
@@ -273,7 +273,7 @@ def get_letter_word_compatibility_cost(
         and letter_data.horizontal_distance_to_home_row != 0
     ):
         # Check for diagonal stretches
-        for pos in word_positions:
+        for pos in token_positions:
             if pos[0] != 0 and pos[1] != 0:
                 cost *= config.diagonal_stretch_weight
                 # Check for diagonal pinches
@@ -284,18 +284,18 @@ def get_letter_word_compatibility_cost(
                     cost *= config.diagonal_pinch_weight
 
     # Account for same finger usage
-    if word_fingers:
-        last_finger = word_fingers[-1]
+    if token_fingers:
+        last_finger = token_fingers[-1]
         if letter_data.finger == last_finger:
             # Check for doubles
             cost *= config.same_finger_double_weight
             # Check for triples
-            if len(word_fingers) >= 2 and word_fingers[-2] == last_finger:
+            if len(token_fingers) >= 2 and token_fingers[-2] == last_finger:
                 cost *= config.same_finger_triple_weight
 
     # Account for specific awkward combinations
-    if word_fingers:
-        last_finger = word_fingers[-1]
+    if token_fingers:
+        last_finger = token_fingers[-1]
         curr_finger = letter_data.finger
 
         # Pinky-ring stretches
@@ -333,76 +333,76 @@ def get_letter_word_compatibility_cost(
 
 # ,Use set operations for better performance
 def get_most_compatible_letter(
-    word: WordData, layout: Dict[str, LetterData], config: GeneratorConfig
+    token: TokenData, layout: Dict[str, LetterData], config: GeneratorConfig
 ) -> str:
-    """Find the most compatible letter to add to a word based on keyboard layout"""
-    unused_letters = set(string.ascii_lowercase) - set(word.lower)
+    """Find the most compatible letter to add to a token based on keyboard layout"""
+    unused_letters = set(string.ascii_lowercase) - set(token.lower)
     return min(
         unused_letters,
-        key=lambda letter: get_letter_word_compatibility_cost(
-            letter, word, layout, config
+        key=lambda letter: get_letter_token_compatibility_cost(
+            letter, token, layout, config
         ),
     )
 
 
 def generate_fallback_chords(
-    word: WordData,
+    token: TokenData,
     layout: dict[str, LetterData],
     unavailable_chords: Set[str],
     config: GeneratorConfig,
     fallback_iteration: int,
 ) -> Tuple[List[str], int]:
-    """Generate a fallback chord that also contains letters not in the word"""
+    """Generate a fallback chord that also contains letters not in the token"""
     fallback_iteration += 1
-    new_letter = get_most_compatible_letter(word, layout, config)
-    new_word = word
-    new_word.length += 1
-    new_word.lower += new_letter
-    new_word.original += new_letter
-    new_chords = generate_standard_chords(new_word, unavailable_chords, config)
+    new_letter = get_most_compatible_letter(token, layout, config)
+    new_token = token
+    new_token.length += 1
+    new_token.lower += new_letter
+    new_token.original += new_letter
+    new_chords = generate_standard_chords(new_token, unavailable_chords, config)
     if not new_chords:
         return generate_fallback_chords(
-            new_word, layout, unavailable_chords, config, fallback_iteration
+            new_token, layout, unavailable_chords, config, fallback_iteration
         )
     return new_chords, fallback_iteration
 
 
 def assign_chords(
-    words: List[str], layout: Dict[str, LetterData], config: GeneratorConfig
+    tokens: List[str], layout: Dict[str, LetterData], config: GeneratorConfig
 ) -> Tuple[Dict[str, str], OptimizationMetrics]:
     """Assign chords using weighted optimization with guaranteed assignments"""
-    if not words:
-        raise ValueError("Empty word list")
+    if not tokens:
+        raise ValueError("Empty token list")
 
-    total_words = len(words)
+    total_tokens = len(tokens)
     used_chords: Set[str] = set()
     assignments: Dict[str, str] = {}
     metrics = {
         "total_length": 0,
         "single_letter_count": 0,
         "fallback_count": 0,
-        "words_with_chords": 0,
+        "tokens_with_chords": 0,
         "total_cost": 0.0,
     }
 
-    for rank, word in enumerate(words):
-        word_data = WordData.from_word(word)
-        if word_data.length == 1:
-            assignments[word] = ""
+    for rank, token in enumerate(tokens):
+        token_data = TokenData.from_token(token)
+        if token_data.length == 1:
+            assignments[token] = ""
             metrics["single_letter_count"] += 1
             continue
 
-        valid_combos = generate_standard_chords(word_data, used_chords, config)
+        valid_combos = generate_standard_chords(token_data, used_chords, config)
         fallback_count = 0
         if not valid_combos:
             valid_combos, fallback_count = generate_fallback_chords(
-                word_data, layout, used_chords, config, fallback_iteration=0
+                token_data, layout, used_chords, config, fallback_iteration=0
             )
 
         combo_costs = [
             (
                 calculate_assignment_cost(
-                    word_data, rank, total_words, combo, config, fallback_count
+                    token_data, rank, total_tokens, combo, config, fallback_count
                 ),
                 combo,
             )
@@ -410,30 +410,30 @@ def assign_chords(
         ]
         cost, best_combo = min(combo_costs)
 
-        assignments[word] = best_combo
+        assignments[token] = best_combo
         used_chords.add(best_combo)
         metrics["total_length"] += len(best_combo)
-        metrics["words_with_chords"] += 1
+        metrics["tokens_with_chords"] += 1
         metrics["total_cost"] += cost
 
     # Calculate metrics
-    words_with_actual_chords = [(w, c) for w, c in assignments.items() if c]
+    tokens_with_actual_chords = [(w, c) for w, c in assignments.items() if c]
 
     return assignments, OptimizationMetrics(
         total_cost=metrics["total_cost"],
         first_last_usage=(
-            sum(1 for w, c in words_with_actual_chords if w[0] in c or w[-1] in c)
-            / len(words_with_actual_chords)
-            if words_with_actual_chords
+            sum(1 for w, c in tokens_with_actual_chords if w[0] in c or w[-1] in c)
+            / len(tokens_with_actual_chords)
+            if tokens_with_actual_chords
             else 1.0
         ),
         fallback_assignments=metrics["fallback_count"],
         average_chord_length=(
-            metrics["total_length"] / metrics["words_with_chords"]
-            if metrics["words_with_chords"] > 0
+            metrics["total_length"] / metrics["tokens_with_chords"]
+            if metrics["tokens_with_chords"] > 0
             else 0
         ),
-        single_letter_words=metrics["single_letter_count"],
+        single_letter_tokens=metrics["single_letter_count"],
     )
 
 
@@ -452,16 +452,16 @@ def process_corpus_json(config: GeneratorConfig) -> None:
     if data.get("orderedByFrequency") is False:
         sys.exit("List not ordered by frequency")
 
-    print("Processing word list...")
-    words = data.get("words", [])
-    if not words:
-        sys.exit("Empty word list in input file")
+    print("Processing token list...")
+    tokens = data.get("tokens", [])
+    if not tokens:
+        sys.exit("Empty token list in input file")
 
     layout = create_keyboard_mapping(config)
 
     print("Assigning chords...")
     try:
-        assignments, metrics = assign_chords(words, layout, config)
+        assignments, metrics = assign_chords(tokens, layout, config)
     except RuntimeError as e:
         sys.exit(f"Failed to generate chords: {str(e)}")
 
@@ -473,13 +473,13 @@ def process_corpus_json(config: GeneratorConfig) -> None:
             "firstLastUsage": metrics.first_last_usage,
             "fallbackAssignments": metrics.fallback_assignments,
             "averageChordLength": metrics.average_chord_length,
-            "singleLetterWords": metrics.single_letter_words,
+            "singleLetterTokens": metrics.single_letter_tokens,
         },
         "chords": {
-            word: (
-                assignments[word] if word in assignments and assignments[word] else None
+            token: (
+                assignments[token] if token in assignments and assignments[token] else None
             )
-            for word in words
+            for token in tokens
         },
     }
 
@@ -495,7 +495,7 @@ def process_corpus_json(config: GeneratorConfig) -> None:
         print(f"First/Last Usage: {metrics.first_last_usage:.4f}")
         print(f"Fallback Assignments: {metrics.fallback_assignments}")
         print(f"Average Chord Length: {metrics.average_chord_length:.2f}")
-        print(f"Single letter Words: {metrics.single_letter_words}")
+        print(f"Single letter Tokens: {metrics.single_letter_tokens}")
     except IOError as e:
         sys.exit(f"Error writing output file: {e}")
 

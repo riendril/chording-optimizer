@@ -1,11 +1,11 @@
 """
-Assignment metrics for word-chord pair evaluation.
+Assignment metrics for token-chord pair evaluation.
 
 Usage:
     calculator = AssignmentMetricCalculator(config)
-    word_data = WordData(...)
+    token_data = TokenData(...)
     chord_data = ChordData(...)
-    metrics = calculator.calculate(word_data, chord_data)
+    metrics = calculator.calculate(token_data, chord_data)
 """
 
 from enum import Enum
@@ -17,12 +17,12 @@ from src.common.shared_types import (
     SetMetricType,
     StandaloneCombinationType,
     StandaloneMetricType,
-    WordData,
+    TokenData,
 )
 
-AssignmentMetricFn = Callable[[WordData, ChordData], float]
+AssignmentMetricFn = Callable[[TokenData, ChordData], float]
 
 
-def calc_first_letter_unmatched(word: WordData, chord: ChordData) -> float:
+def calc_first_letter_unmatched(token: TokenData, chord: ChordData) -> float:
     """Calculate cost for first letter mismatch"""
     # Implementation
