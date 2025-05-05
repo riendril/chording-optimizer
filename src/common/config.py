@@ -164,6 +164,7 @@ class TokenAnalysisConfig:
     include_tokens: bool
     include_token_ngrams: bool
     use_parallel_processing: bool
+    length_benefit_exponent: float = 1.5
 
 
 @dataclass
@@ -187,6 +188,16 @@ class ChordAssignmentConfig:
     pinky_ring_stretch_weight: float
     ring_middle_scissor_weight: float
     middle_index_stretch_weight: float
+
+    # Context and selection algorithm parameters
+    context_weight: float = 0.2  # Weight for context influence on scoring
+
+    # Genetic algorithm parameters
+    population_size: int = 50  # Genetic algorithm population size
+    generations: int = 100  # Number of generations for genetic algorithm
+    elite_count: int = 5  # Number of elite individuals to preserve unchanged
+    mutation_rate: float = 0.1  # Probability of mutation for each token
+    crossover_rate: float = 0.7  # Probability of crossover for each pair
 
 
 @dataclass
@@ -374,6 +385,7 @@ class GeneratorConfig:
             include_tokens=token_data["include_tokens"],
             include_token_ngrams=token_data["include_token_ngrams"],
             use_parallel_processing=token_data["use_parallel_processing"],
+            length_benefit_exponent=token_data.get("length_benefit_exponent", 1.5),
         )
 
         # Parse chord assignment config
@@ -398,6 +410,12 @@ class GeneratorConfig:
             pinky_ring_stretch_weight=assign_data["pinky_ring_stretch_weight"],
             ring_middle_scissor_weight=assign_data["ring_middle_scissor_weight"],
             middle_index_stretch_weight=assign_data["middle_index_stretch_weight"],
+            context_weight=assign_data.get("context_weight", 0.2),
+            population_size=assign_data.get("population_size", 50),
+            generations=assign_data.get("generations", 100),
+            elite_count=assign_data.get("elite_count", 5),
+            mutation_rate=assign_data.get("mutation_rate", 0.1),
+            crossover_rate=assign_data.get("crossover_rate", 0.7),
         )
 
         # Get active settings with file extensions
@@ -486,6 +504,7 @@ class GeneratorConfig:
                 "include_tokens": self.token_analysis.include_tokens,
                 "include_token_ngrams": self.token_analysis.include_token_ngrams,
                 "use_parallel_processing": self.token_analysis.use_parallel_processing,
+                "length_benefit_exponent": self.token_analysis.length_benefit_exponent,
             },
             "chord_assignment": {
                 "algorithm": self.chord_assignment.algorithm,
@@ -505,6 +524,12 @@ class GeneratorConfig:
                 "pinky_ring_stretch_weight": self.chord_assignment.pinky_ring_stretch_weight,
                 "ring_middle_scissor_weight": self.chord_assignment.ring_middle_scissor_weight,
                 "middle_index_stretch_weight": self.chord_assignment.middle_index_stretch_weight,
+                "context_weight": self.chord_assignment.context_weight,
+                "population_size": self.chord_assignment.population_size,
+                "generations": self.chord_assignment.generations,
+                "elite_count": self.chord_assignment.elite_count,
+                "mutation_rate": self.chord_assignment.mutation_rate,
+                "crossover_rate": self.chord_assignment.crossover_rate,
             },
         }
         return result
@@ -583,6 +608,31 @@ class GeneratorConfig:
             raise ValueError("categories must not be empty")
         if sum(self.corpus_generation.categories.values()) <= 0:
             raise ValueError("sum of category weights must be positive")
+
+        # Validate chord assignment settings
+        if (
+            self.chord_assignment.context_weight < 0
+            or self.chord_assignment.context_weight > 1
+        ):
+            raise ValueError("context_weight must be between 0 and 1")
+        if self.chord_assignment.population_size < 2:
+            raise ValueError("population_size must be at least 2")
+        if self.chord_assignment.generations < 1:
+            raise ValueError("generations must be at least 1")
+        if self.chord_assignment.elite_count < 0:
+            raise ValueError("elite_count must be non-negative")
+        if self.chord_assignment.elite_count >= self.chord_assignment.population_size:
+            raise ValueError("elite_count must be less than population_size")
+        if (
+            self.chord_assignment.mutation_rate < 0
+            or self.chord_assignment.mutation_rate > 1
+        ):
+            raise ValueError("mutation_rate must be between 0 and 1")
+        if (
+            self.chord_assignment.crossover_rate < 0
+            or self.chord_assignment.crossover_rate > 1
+        ):
+            raise ValueError("crossover_rate must be between 0 and 1")
 
         # Validate active settings by checking that the referenced files exist
         try:

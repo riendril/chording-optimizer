@@ -67,6 +67,9 @@ token_analysis:
 
   # Performance optimization
   use_parallel_processing: true # Use multiple CPU cores for processing
+  
+  # Token length benefit exponent (higher values favor longer tokens)
+  length_benefit_exponent: 1.5
 
 #------------------------------------------------------------------------------
 # Corpus generation parameters
@@ -105,8 +108,8 @@ corpus_generation:
 #------------------------------------------------------------------------------
 chord_assignment:
   # Algorithm to use for chord assignment
-  # Available options: "algorithm1", "algorithm2"
-  algorithm: "algorithm1"
+  # Available options: "greedy", "genetic", "compare"
+  algorithm: "greedy"
 
   # Penalty weights for different assignment criteria
   # Higher values mean stronger penalties
@@ -132,6 +135,16 @@ chord_assignment:
   pinky_ring_stretch_weight: 2.0 # Penalty for pinky-ring finger stretches
   ring_middle_scissor_weight: 1.8 # Penalty for ring-middle scissor movements
   middle_index_stretch_weight: 1.6 # Penalty for middle-index stretches
+
+  # Context influence weights
+  context_weight: 0.2 # Weight for context influence on scoring (0.0-1.0)
+  
+  # Genetic algorithm parameters
+  population_size: 50    # Genetic algorithm population size
+  generations: 100       # Number of generations for genetic algorithm
+  elite_count: 5         # Number of elite individuals to preserve unchanged
+  mutation_rate: 0.1     # Probability of mutation for each token
+  crossover_rate: 0.7    # Probability of crossover for each pair
 
 #------------------------------------------------------------------------------
 # Metric weights for standalone chord evaluation
