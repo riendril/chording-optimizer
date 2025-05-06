@@ -21,6 +21,7 @@ from src.common.shared_types import (
     Finger,
     SetMetricType,
     StandaloneMetricType,
+    TokenType,
 )
 
 
@@ -179,6 +180,9 @@ class TokenAnalysisConfig:
     max_token_length: int
     top_n_tokens: int
     scoring_complexity: TokenScoringComplexity = TokenScoringComplexity.SIMPLE
+    learning_limit_type: TokenType = (
+        TokenType.WORD_WITH_SPACE
+    )  # Maximum token type complexity to learn
 
 
 @dataclass
@@ -410,6 +414,9 @@ class GeneratorConfig:
             scoring_complexity=TokenScoringComplexity[
                 token_data.get("scoring_complexity", "SIMPLE").upper()
             ],
+            learning_limit_type=TokenType[
+                token_data.get("learning_limit_type", "WORD_WITH_SPACE")
+            ],
         )
 
         # Parse chord assignment config
@@ -517,6 +524,7 @@ class GeneratorConfig:
                 "max_token_length": self.token_analysis.max_token_length,
                 "top_n_tokens": self.token_analysis.top_n_tokens,
                 "scoring_complexity": self.token_analysis.scoring_complexity.name.lower(),
+                "learning_limit_type": self.token_analysis.learning_limit_type.name,
             },
             "standalone_weights": {
                 metric_type.name: weight

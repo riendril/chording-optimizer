@@ -14,15 +14,72 @@ import os
 import re
 import string
 from collections import Counter, defaultdict
-from typing import Dict, List, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import tqdm
 
 from src.common.benchmarking import Benchmark, BenchmarkPhase
 from src.common.config import GeneratorConfig
-from src.common.shared_types import TokenCollection, TokenData
+from src.common.shared_types import TokenCollection, TokenData, TokenType
 
 logger = logging.getLogger(__name__)
+
+
+# Data structure for interval tracking
+class IntervalSet:
+    """Efficient data structure for tracking intervals in a text
+
+    This is used to avoid double-counting tokens during extraction.
+    """
+
+    def __init__(self):
+        self.intervals = []  # List of (start, end) tuples
+
+    def add_interval(self, start: int, end: int) -> bool:
+        """Add an interval if it doesn't overlap with existing intervals
+
+        Args:
+            start: Start position of interval
+            end: End position of interval
+
+        Returns:
+            True if interval was added, False if it overlaps with existing interval
+        """
+        # Check for overlaps using binary search (O(log n))
+        idx = self._find_insertion_index(start)
+
+        # Check if this interval overlaps with previous interval
+        if idx > 0 and self.intervals[idx - 1][1] > start:
+            return False
+
+        # Check if this interval overlaps with next interval
+        if idx < len(self.intervals) and self.intervals[idx][0] < end:
+            return False
+
+        # Insert the interval at the correct position
+        self.intervals.insert(idx, (start, end))
+        return True
+
+    def _find_insertion_index(self, start: int) -> int:
+        """Binary search to find insertion index for a new interval
+
+        Args:
+            start: Start position of interval
+
+        Returns:
+            Index where the interval should be inserted
+        """
+        left, right = 0, len(self.intervals)
+
+        while left < right:
+            mid = (left + right) // 2
+            if self.intervals[mid][0] < start:
+                left = mid + 1
+            else:
+                right = mid
+
+        return left
 
 
 # Trie node for efficient subtoken/supertoken detection
@@ -87,27 +144,6 @@ class Trie:
 
         return results
 
-    def build_suffix_map(self, tokens: List[TokenData]) -> Dict[str, List[int]]:
-        """Build a suffix map to efficiently find tokens containing a substring
-
-        Args:
-            tokens: List of token data objects
-
-        Returns:
-            Dictionary mapping token text to indices of tokens it's contained in
-        """
-        # For each suffix of each token, track which tokens have that suffix
-        suffix_map = defaultdict(list)
-
-        for i, token in enumerate(tokens):
-            token_text = token.lower
-            # Generate all suffixes (minimum 2 chars for efficiency)
-            for j in range(len(token_text) - 1):
-                suffix = token_text[j:]
-                suffix_map[suffix].append(i)
-
-        return suffix_map
-
 
 # Function defined at module level for multiprocessing compatibility
 def process_chunk(chunk, min_length, max_length):
@@ -123,29 +159,88 @@ def process_chunk(chunk, min_length, max_length):
     """
     result = Counter()
 
-    # Process words
-    words = re.findall(r"\b\w+\b", chunk)
-    for word in words:
-        if min_length <= len(word) <= max_length:
-            result[word] += 1
-
-    # Process word n-grams
-    for n in range(2, 4):  # Limit to 2-3 word phrases
-        for i in range(len(words) - n + 1):
-            ngram = " ".join(words[i : i + n])
-            if min_length <= len(ngram) <= max_length:
-                result[ngram] += 1
-
-    # Process character n-grams
-    for n in range(min_length, max_length + 1):
-        for i in range(len(chunk) - n + 1):
-            ngram = chunk[i : i + n]
-            if all(c in string.printable for c in ngram) and not re.search(
-                r"\s{2,}", ngram
-            ):
-                result[ngram] += 1
+    # Extract tokens with efficient non-overlapping algorithm
+    extract_tokens_efficiently(chunk, min_length, max_length, result)
 
     return result
+
+
+def extract_tokens_efficiently(
+    text: str, min_length: int, max_length: int, token_counts: Counter
+):
+    """Extract tokens from text with O(n log n) efficiency, avoiding double-counting
+
+    Args:
+        text: Text to extract tokens from
+        min_length: Minimum token length to include
+        max_length: Maximum token length to include
+        token_counts: Counter to update with tokens
+    """
+    # Use IntervalSet to track which parts of text have been processed
+    intervals = IntervalSet()
+
+    # Priority order for token types (highest to lowest priority)
+    # 1. Words followed by space
+    # 2. Complete words
+    # 3. Word n-grams
+    # 4. Character n-grams
+
+    # First extract and track word positions (for classification)
+    word_positions = []
+    for match in re.finditer(r"\b\w+\b", text):
+        start, end = match.span()
+        word = match.group()
+        word_positions.append((start, end, word))
+
+        # If word meets length criteria, count it and mark its interval
+        if min_length <= len(word) <= max_length:
+            token_counts[word] += 1
+            intervals.add_interval(start, end)
+
+        # Check for "word followed by space"
+        if end < len(text) and text[end] == " ":
+            word_space = word + " "
+            if min_length <= len(word_space) <= max_length:
+                token_counts[word_space] += 1
+                intervals.add_interval(start, end + 1)  # Include the space
+
+    # Process word n-grams efficiently
+    words = [word for _, _, word in word_positions]
+    for n in range(2, 4):  # 2-3 word phrases
+        for i in range(len(words) - n + 1):
+            # Find the start and end positions of this n-gram
+            start_pos = word_positions[i][0]
+            end_pos = word_positions[i + n - 1][1]
+
+            # Only process if this n-gram fits the length criteria
+            ngram = " ".join(words[i : i + n])
+            if min_length <= len(ngram) <= max_length:
+                # Check if this interval has already been covered
+                if intervals.add_interval(start_pos, end_pos):
+                    token_counts[ngram] += 1
+
+    # Process character n-grams that haven't been covered
+    # We'll process in small chunks for better performance
+    chunk_size = 100
+    for chunk_start in range(0, len(text), chunk_size):
+        chunk_end = min(chunk_start + chunk_size + max_length, len(text))
+        chunk = text[chunk_start:chunk_end]
+
+        # For each possible n-gram length
+        for n in range(min_length, max_length + 1):
+            # For each possible starting position
+            for i in range(len(chunk) - n + 1):
+                abs_start = chunk_start + i
+                abs_end = abs_start + n
+
+                # Only process if this interval hasn't been covered yet
+                if intervals.add_interval(abs_start, abs_end):
+                    ngram = chunk[i : i + n]
+                    # Skip n-grams with non-printable chars or excessive whitespace
+                    if all(c in string.printable for c in ngram) and not re.search(
+                        r"\s{2,}", ngram
+                    ):
+                        token_counts[ngram] += 1
 
 
 def extract_tokens(config: GeneratorConfig) -> None:
@@ -191,11 +286,14 @@ def extract_tokens(config: GeneratorConfig) -> None:
         token_scores, token_counts, config.token_analysis.top_n_tokens
     )
 
-    # Apply subtoken/supertoken adjustments
+    # Apply subtoken/supertoken adjustments based on learning limit
     logger.info("Applying subtoken/supertoken adjustments")
     benchmark.start_phase(BenchmarkPhase.SET_IMPROVEMENT)
-    final_tokens = apply_token_adjustments_trie(
-        initial_top_tokens, token_counts, benchmark
+    final_tokens = apply_token_adjustments_with_limit(
+        initial_top_tokens,
+        token_counts,
+        config.token_analysis.learning_limit_type,
+        benchmark,
     )
     benchmark.end_phase()
 
@@ -246,49 +344,10 @@ def extract_all_tokens(
 
     token_counts = Counter()
 
-    # Extract word tokens (words and word n-grams)
-    words = re.findall(r"\b\w+\b", text)
-
-    # Extract individual words with progress bar
-    logger.info("Extracting words...")
-    for word in tqdm.tqdm(words, desc="Extracting words"):
-        if min_length <= len(word) <= max_length:
-            token_counts[word] += 1
-        benchmark.update_phase(len(token_counts))
-
-    # Extract word n-grams with progress bar
-    logger.info("Extracting word n-grams...")
-    for n in range(2, 4):  # Limit to 2-3 word phrases
-        for i in tqdm.tqdm(
-            range(len(words) - n + 1), desc=f"Extracting {n}-word phrases"
-        ):
-            ngram = " ".join(words[i : i + n])
-            if min_length <= len(ngram) <= max_length:
-                token_counts[ngram] += 1
-            benchmark.update_phase(len(token_counts))
-
-    # Extract character tokens (single characters and character n-grams)
-    logger.info("Extracting character n-grams...")
-
-    # For large texts, we'll process in chunks for better progress tracking
-    chunk_size = 10000
-    total_chunks = (len(text) + chunk_size - 1) // chunk_size
-
-    for chunk_idx in tqdm.tqdm(range(total_chunks), desc="Processing text chunks"):
-        chunk_start = chunk_idx * chunk_size
-        chunk_end = min((chunk_idx + 1) * chunk_size, len(text))
-        chunk = text[chunk_start:chunk_end]
-
-        for n in range(min_length, max_length + 1):
-            for i in range(len(chunk) - n + 1):
-                ngram = chunk[i : i + n]
-                # Skip n-grams with non-printable characters or excessive whitespace
-                if all(c in string.printable for c in ngram) and not re.search(
-                    r"\s{2,}", ngram
-                ):
-                    token_counts[ngram] += 1
-
-        benchmark.update_phase(len(token_counts))
+    logger.info("Extracting tokens (efficient non-overlapping algorithm)...")
+    # Use efficient non-overlapping extraction
+    extract_tokens_efficiently(text, min_length, max_length, token_counts)
+    benchmark.update_phase(len(token_counts))
 
     return token_counts
 
@@ -300,7 +359,15 @@ def _extract_tokens_parallel(
     # Split text into chunks
     cpu_count = multiprocessing.cpu_count()
     chunk_size = max(1000, len(text) // cpu_count)
-    chunks = [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+    # Add overlap to ensure we don't miss tokens at boundaries
+    overlap = max_length - 1
+
+    # Create overlapping chunks
+    chunks = []
+    for i in range(0, len(text), chunk_size):
+        chunk_end = min(i + chunk_size + overlap, len(text))
+        chunks.append(text[i:chunk_end])
 
     logger.info(f"Processing text in {len(chunks)} parallel chunks...")
 
@@ -389,16 +456,18 @@ def get_top_n_tokens(
     )
 
 
-def apply_token_adjustments_trie(
+def apply_token_adjustments_with_limit(
     token_collection: TokenCollection,
     token_counts: Dict[str, int],
+    learning_limit: TokenType,
     benchmark: Benchmark,
 ) -> TokenCollection:
-    """Apply subtoken/supertoken adjustments using a trie for O(n log n) efficiency
+    """Apply subtoken/supertoken adjustments using a trie, respecting learning limit
 
     Args:
         token_collection: Initial collection of top tokens
         token_counts: Complete dictionary of token counts
+        learning_limit: Maximum token type complexity to consider
         benchmark: Benchmark instance for performance tracking
 
     Returns:
@@ -408,18 +477,32 @@ def apply_token_adjustments_trie(
     tokens = token_collection.tokens.copy()
     total_count = sum(token_counts.values())
 
+    # Filter tokens based on learning limit
+    logger.info(f"Filtering tokens based on learning limit: {learning_limit.name}")
+    eligible_tokens = [t for t in tokens if t.token_type <= learning_limit]
+
+    # Log statistics about eligible tokens
+    token_type_counts = {t.name: 0 for t in TokenType}
+    for t in tokens:
+        token_type_counts[t.token_type.name] += 1
+
+    logger.info(f"Token type distribution: {token_type_counts}")
+    logger.info(
+        f"Eligible tokens for adjustment: {len(eligible_tokens)} out of {len(tokens)}"
+    )
+
     # Build trie for efficient subtoken detection
     logger.info("Building trie for token relationships...")
     trie = Trie()
-    for i, token in enumerate(tokens):
+    for i, token in enumerate(eligible_tokens):
         trie.insert(token, i)
 
     # Process tokens in order of score (highest first)
     logger.info("Processing tokens with trie-based algorithm...")
     processed = set()
 
-    # Process in order of initial ranking
-    tokens_by_score = sorted(tokens, key=lambda t: t.score, reverse=True)
+    # Process in order of initial ranking, but only for eligible tokens
+    tokens_by_score = sorted(eligible_tokens, key=lambda t: t.score, reverse=True)
 
     for token in tqdm.tqdm(tokens_by_score, desc="Adjusting token scores"):
         if token.lower in processed:
@@ -434,13 +517,12 @@ def apply_token_adjustments_trie(
                 continue
 
             # Adjust frequency and score
-            adjusted_freq = max(1, subtoken.frequency - token.frequency)
+            adjusted_freq = subtoken.frequency - token.frequency
             subtoken.frequency = adjusted_freq
             subtoken.score = (adjusted_freq / total_count) * len(subtoken.lower)
 
         # Check if this token is a subtoken of any other token
-        # This is still efficient since we're only checking tokens that contain this token as a substring
-        for other_token in tokens:
+        for other_token in eligible_tokens:
             if other_token.lower in processed or other_token.lower == token.lower:
                 continue
 
@@ -455,7 +537,7 @@ def apply_token_adjustments_trie(
 
         benchmark.update_phase(len(processed))
 
-    # Re-sort tokens by adjusted score
+    # Re-sort all tokens by adjusted score
     tokens.sort(key=lambda t: t.score, reverse=True)
 
     # Update ranks

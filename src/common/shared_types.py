@@ -2,7 +2,7 @@
 
 import json
 from dataclasses import dataclass, field
-from enum import Enum, auto
+from enum import Enum, IntEnum, auto
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -20,6 +20,49 @@ class Finger(Enum):
     R_MIDDLE = auto()
     R_RING = auto()
     R_PINKY = auto()
+
+
+class TokenType(IntEnum):
+    """Types of tokens with increasing learning complexity"""
+
+    SINGLE_CHARACTER = 0
+    FULL_WORD = 1
+    NGRAM_LETTERS_ONLY = 2
+    WORD_WITH_SPACE = 3
+    NGRAM_NO_LETTERS = 4
+    OTHER = 5
+
+    @classmethod
+    def classify_token(cls, token: str) -> "TokenType":
+        """Classify a token based on its content
+
+        Args:
+            token: Token to classify
+
+        Returns:
+            TokenType classification
+        """
+        if len(token) == 1:
+            return cls.SINGLE_CHARACTER
+
+        # Check if it's a word followed by space
+        if token.endswith(" ") and " " not in token[:-1] and token[:-1].isalpha():
+            return cls.WORD_WITH_SPACE
+
+        # Check if it's a full word (only letters)
+        if token.isalpha() and " " not in token:
+            return cls.FULL_WORD
+
+        # Check if it's an n-gram with only letters
+        if token.replace(" ", "").isalpha():
+            return cls.NGRAM_LETTERS_ONLY
+
+        # Check if it's an n-gram with no letters
+        if not any(c.isalpha() for c in token):
+            return cls.NGRAM_NO_LETTERS
+
+        # Default to other
+        return cls.OTHER
 
 
 @dataclass
@@ -69,6 +112,7 @@ class TokenData:
     original: str
     lower: str
     length: int
+    token_type: TokenType
     frequency: int = 0  # Token frequency count
     rank: int = 0  # Token frequency rank
     score: float = 0.0  # Token score
@@ -79,6 +123,7 @@ class TokenData:
             "original": self.original,
             "lower": self.lower,
             "length": self.length,
+            "token_type": self.token_type.name,
             "frequency": self.frequency,
             "rank": self.rank,
             "score": self.score,
@@ -91,6 +136,7 @@ class TokenData:
             original=data["original"],
             lower=data["lower"],
             length=data["length"],
+            token_type=TokenType[data.get("token_type", "OTHER")],
             frequency=data.get("frequency", 0),
             rank=data.get("rank", 0),
             score=data.get("score", 0.0),
@@ -109,6 +155,7 @@ class TokenData:
             original=token,
             lower=token.lower(),
             length=len(token),
+            token_type=TokenType.classify_token(token.lower()),
             frequency=frequency,
             rank=rank,
             score=score,
