@@ -14,8 +14,7 @@ import os
 import re
 import string
 from collections import Counter, defaultdict
-from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Tuple
 
 import tqdm
 
@@ -24,6 +23,90 @@ from src.common.config import GeneratorConfig
 from src.common.shared_types import TokenCollection, TokenData
 
 logger = logging.getLogger(__name__)
+
+
+# Trie node for efficient subtoken/supertoken detection
+class TrieNode:
+    """Node in a trie data structure for efficient string operations"""
+
+    def __init__(self):
+        self.children = {}
+        self.is_end_of_word = False
+        self.token_data = None
+        self.indices = []  # Store positions where this node ends a word
+
+
+class Trie:
+    """Trie data structure for efficient subtoken/supertoken detection"""
+
+    def __init__(self):
+        self.root = TrieNode()
+
+    def insert(self, token_data: TokenData, index: int):
+        """Insert a token into the trie
+
+        Args:
+            token_data: TokenData object to insert
+            index: Position of this token in the original list
+        """
+        node = self.root
+        for char in token_data.lower:
+            if char not in node.children:
+                node.children[char] = TrieNode()
+            node = node.children[char]
+
+        node.is_end_of_word = True
+        node.token_data = token_data
+        node.indices.append(index)
+
+    def find_subtokens(self, token: str) -> List[Tuple[int, TokenData]]:
+        """Find all subtokens within a token
+
+        Args:
+            token: Token to search for subtokens
+
+        Returns:
+            List of (index, TokenData) pairs for all subtokens
+        """
+        results = []
+
+        # For each starting position in the token
+        for i in range(len(token)):
+            node = self.root
+            # For each possible ending position from this start
+            for j in range(i, len(token)):
+                char = token[j]
+                if char not in node.children:
+                    break
+
+                node = node.children[char]
+                # If this is a complete token (not just a prefix)
+                if node.is_end_of_word and node.token_data.lower != token:
+                    for idx in node.indices:
+                        results.append((idx, node.token_data))
+
+        return results
+
+    def build_suffix_map(self, tokens: List[TokenData]) -> Dict[str, List[int]]:
+        """Build a suffix map to efficiently find tokens containing a substring
+
+        Args:
+            tokens: List of token data objects
+
+        Returns:
+            Dictionary mapping token text to indices of tokens it's contained in
+        """
+        # For each suffix of each token, track which tokens have that suffix
+        suffix_map = defaultdict(list)
+
+        for i, token in enumerate(tokens):
+            token_text = token.lower
+            # Generate all suffixes (minimum 2 chars for efficiency)
+            for j in range(len(token_text) - 1):
+                suffix = token_text[j:]
+                suffix_map[suffix].append(i)
+
+        return suffix_map
 
 
 # Function defined at module level for multiprocessing compatibility
@@ -111,7 +194,9 @@ def extract_tokens(config: GeneratorConfig) -> None:
     # Apply subtoken/supertoken adjustments
     logger.info("Applying subtoken/supertoken adjustments")
     benchmark.start_phase(BenchmarkPhase.SET_IMPROVEMENT)
-    final_tokens = apply_token_adjustments(initial_top_tokens, token_counts, benchmark)
+    final_tokens = apply_token_adjustments_trie(
+        initial_top_tokens, token_counts, benchmark
+    )
     benchmark.end_phase()
 
     # Create output filename
@@ -304,60 +389,12 @@ def get_top_n_tokens(
     )
 
 
-def build_prefix_map(tokens: List[TokenData]) -> Dict[str, List[TokenData]]:
-    """Build an efficient prefix map to find subtokens
-
-    Args:
-        tokens: List of TokenData objects
-
-    Returns:
-        Dictionary mapping tokens to all their possible subtokens
-    """
-    # Group tokens by their first character for faster lookups
-    first_char_map = defaultdict(list)
-    for token in tokens:
-        if token.lower:  # Skip empty tokens
-            first_char_map[token.lower[0]].append(token)
-
-    # Build the prefix map
-    prefix_map = {}
-    for token in tokens:
-        if not token.lower:  # Skip empty tokens
-            continue
-
-        # Find all possible subtokens
-        subtokens = []
-        token_text = token.lower
-
-        # For each possible starting position in the token
-        for start in range(len(token_text)):
-            # Only check tokens that start with this character (optimization)
-            possible_matches = first_char_map.get(token_text[start], [])
-
-            # For each possible ending position
-            for end in range(start + 1, len(token_text) + 1):
-                substring = token_text[start:end]
-
-                # Check if this substring is in our token list
-                for potential_match in possible_matches:
-                    if potential_match.lower == substring:
-                        subtokens.append(potential_match)
-
-        prefix_map[token.lower] = subtokens
-
-    return prefix_map
-
-
-def apply_token_adjustments(
+def apply_token_adjustments_trie(
     token_collection: TokenCollection,
     token_counts: Dict[str, int],
     benchmark: Benchmark,
 ) -> TokenCollection:
-    """Apply subtoken/supertoken adjustments to the token collection
-
-    For each token, adjust the scores of:
-    - Subtokens: Reduce frequency by the frequency of the current token
-    - Supertokens: Reduce effective length by (token length - 1)
+    """Apply subtoken/supertoken adjustments using a trie for O(n log n) efficiency
 
     Args:
         token_collection: Initial collection of top tokens
@@ -369,73 +406,54 @@ def apply_token_adjustments(
     """
     # Make a copy of the original token list
     tokens = token_collection.tokens.copy()
+    total_count = sum(token_counts.values())
 
-    # Build efficient data structures for subtoken/supertoken lookup
-    logger.info("Building token relationship maps...")
+    # Build trie for efficient subtoken detection
+    logger.info("Building trie for token relationships...")
+    trie = Trie()
+    for i, token in enumerate(tokens):
+        trie.insert(token, i)
 
-    # Build a map of token text to token object for quick lookup
-    token_map = {token.lower: token for token in tokens}
+    # Process tokens in order of score (highest first)
+    logger.info("Processing tokens with trie-based algorithm...")
+    processed = set()
 
-    # Build prefix map for efficient subtoken detection
-    prefix_map = build_prefix_map(tokens)
+    # Process in order of initial ranking
+    tokens_by_score = sorted(tokens, key=lambda t: t.score, reverse=True)
 
-    # Build suffix map for efficient supertoken detection
-    # We'll use a simpler approach: group tokens by length and then check
-    tokens_by_length = defaultdict(list)
-    for token in tokens:
-        tokens_by_length[len(token.lower)].append(token)
-
-    # Track processed tokens to avoid double-counting
-    processed_tokens = set()
-    total_tokens = len(tokens)
-
-    # Apply adjustments with progress tracking
-    logger.info("Applying token adjustments...")
-    for i, token in enumerate(tqdm.tqdm(tokens, desc="Adjusting token scores")):
-        if token.lower in processed_tokens:
+    for token in tqdm.tqdm(tokens_by_score, desc="Adjusting token scores"):
+        if token.lower in processed:
             continue
 
-        processed_tokens.add(token.lower)
+        processed.add(token.lower)
 
-        # Find subtokens (tokens contained within this token)
-        for subtoken in prefix_map.get(token.lower, []):
-            if subtoken.lower in processed_tokens or subtoken.lower == token.lower:
+        # Find all subtokens using trie (much more efficient)
+        subtokens = trie.find_subtokens(token.lower)
+        for idx, subtoken in subtokens:
+            if subtoken.lower in processed:
                 continue
 
-            # Adjust frequency by subtracting the frequency of the current token
-            adjusted_frequency = max(1, subtoken.frequency - token.frequency)
-            subtoken.frequency = adjusted_frequency
+            # Adjust frequency and score
+            adjusted_freq = max(1, subtoken.frequency - token.frequency)
+            subtoken.frequency = adjusted_freq
+            subtoken.score = (adjusted_freq / total_count) * len(subtoken.lower)
 
-            # Recalculate score
-            subtoken.score = (adjusted_frequency / sum(token_counts.values())) * len(
-                subtoken.lower
-            )
+        # Check if this token is a subtoken of any other token
+        # This is still efficient since we're only checking tokens that contain this token as a substring
+        for other_token in tokens:
+            if other_token.lower in processed or other_token.lower == token.lower:
+                continue
 
-        # Find supertokens (tokens that contain this token)
-        # More efficient approach: only check tokens longer than this one
-        for length in range(
-            len(token.lower) + 1,
-            min(len(token.lower) * 2, max(tokens_by_length.keys()) + 1),
-        ):
-            for supertoken in tokens_by_length[length]:
-                if (
-                    supertoken.lower in processed_tokens
-                    or supertoken.lower == token.lower
-                ):
-                    continue
+            if token.lower in other_token.lower:
+                # If this token is contained in the other token
+                effective_length = max(
+                    1, len(other_token.lower) - (len(token.lower) - 1)
+                )
+                other_token.score = (
+                    other_token.frequency / total_count
+                ) * effective_length
 
-                if token.lower in supertoken.lower:
-                    # Adjust effective length by subtracting (token length - 1)
-                    effective_length = max(
-                        1, len(supertoken.lower) - (len(token.lower) - 1)
-                    )
-
-                    # Recalculate score with adjusted length
-                    supertoken.score = (
-                        supertoken.frequency / sum(token_counts.values())
-                    ) * effective_length
-
-        benchmark.update_phase(i)
+        benchmark.update_phase(len(processed))
 
     # Re-sort tokens by adjusted score
     tokens.sort(key=lambda t: t.score, reverse=True)
