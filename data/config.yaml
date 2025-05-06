@@ -62,7 +62,7 @@ token_analysis:
   # Types of tokens to include in analysis
   include_characters: true # Include individual characters
   include_character_ngrams: true # Include character n-grams (like "th", "ing")
-  include_tokens: true # Include whole words
+  include_words: true # Include whole words
   include_token_ngrams: true # Include word n-grams (like "the cat")
 
   # Performance optimization

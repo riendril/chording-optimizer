@@ -93,7 +93,7 @@ def extract_tokens_from_text(text: str, config: GeneratorConfig) -> Dict[str, in
             counters.append(extract_character_ngrams(processed_text, n))
 
     # Add tokens if enabled
-    if token_config.include_tokens:
+    if token_config.include_words:
         counters.append(extract_word_tokens(processed_text))
         counters.append(extract_word_tokens_with_space(processed_text))
 
