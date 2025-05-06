@@ -69,11 +69,9 @@ class TokenData:
     original: str
     lower: str
     length: int
-    zipf_weight: float
-    frequency: int = 0  # Added for token frequency count
-    rank: int = 0  # Added for token frequency rank
-    score: float = 0.0  # Added for token score
-    difficulty: float = 0.0  # Added for typing difficulty
+    frequency: int = 0  # Token frequency count
+    rank: int = 0  # Token frequency rank
+    score: float = 0.0  # Token score
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -81,11 +79,9 @@ class TokenData:
             "original": self.original,
             "lower": self.lower,
             "length": self.length,
-            "zipf_weight": self.zipf_weight,
             "frequency": self.frequency,
             "rank": self.rank,
             "score": self.score,
-            "difficulty": self.difficulty,
         }
 
     @classmethod
@@ -95,11 +91,9 @@ class TokenData:
             original=data["original"],
             lower=data["lower"],
             length=data["length"],
-            zipf_weight=data.get("zipf_weight", 0.0),
             frequency=data.get("frequency", 0),
             rank=data.get("rank", 0),
             score=data.get("score", 0.0),
-            difficulty=data.get("difficulty", 0.0),
         )
 
     @classmethod
@@ -108,20 +102,16 @@ class TokenData:
         token: str,
         frequency: int = 0,
         rank: int = 0,
-        zipf_weight: float = 0.0,
         score: float = 0.0,
-        difficulty: float = 0.0,
     ) -> "TokenData":
         """Create from a token string with optional frequency information"""
         return cls(
             original=token,
             lower=token.lower(),
             length=len(token),
-            zipf_weight=zipf_weight,
             frequency=frequency,
             rank=rank,
             score=score,
-            difficulty=difficulty,
         )
 
 
@@ -370,6 +360,15 @@ class AssignmentSet:
         return cls.from_dict(data, finger_enum)
 
 
+@dataclass
+class SetData:
+    """Data for evaluating sets of assignments"""
+
+    assignment_set: AssignmentSet
+    chord_collection: ChordCollection
+    token_collection: TokenCollection
+
+
 class StandaloneMetricType(Enum):
     """Types of metrics for standalone chord analysis"""
 
@@ -393,6 +392,14 @@ class StandaloneMetricType(Enum):
     HORIZONTAL_STRETCH_DOUBLE = auto()
     PINKY_RING_SCISSOR = auto()
     RING_INDEX_SCISSOR = auto()
+
+
+class StandaloneCombinationType(Enum):
+    """How to combine individual standalone metrics"""
+
+    WEIGHTED_SUM = auto()
+    MAX = auto()
+    PRODUCT = auto()
 
 
 class AssignmentMetricType(Enum):

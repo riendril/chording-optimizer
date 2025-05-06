@@ -31,6 +31,12 @@ class LogLevel(Enum):
     DEBUG = logging.DEBUG
 
 
+class TokenScoringComplexity(Enum):
+    SIMPLE = "simple"  # Just length and frequency
+    LAYOUT_AWARE = "layout_aware"  # Include typing comfort based on layout
+    ADVANCED = "advanced"  # Include full metrics from keyboard layout community
+
+
 @dataclass
 class Paths:
     """Path configuration for input and output files"""
@@ -88,6 +94,19 @@ class Paths:
     def get_log_path(self, log_file: str) -> Path:
         """Get path for a log file"""
         return self.debug_dir / log_file
+
+
+@dataclass
+class GeneralSettings:
+    """General settings that apply across the pipeline"""
+
+    # Performance settings
+    use_parallel_processing: bool = True
+
+    # Assignment settings
+    chords_to_assign: int = (
+        100  # Number of chords to assign (default: one tenth of top tokens)
+    )
 
 
 @dataclass
@@ -159,12 +178,7 @@ class TokenAnalysisConfig:
     min_token_length: int
     max_token_length: int
     top_n_tokens: int
-    include_characters: bool
-    include_character_ngrams: bool
-    include_words: bool
-    include_token_ngrams: bool
-    use_parallel_processing: bool
-    length_benefit_exponent: float = 1.5
+    scoring_complexity: TokenScoringComplexity = TokenScoringComplexity.SIMPLE
 
 
 @dataclass
@@ -204,28 +218,33 @@ class ChordAssignmentConfig:
 class GeneratorConfig:
     """Main configuration for the chord generator"""
 
-    # Core components
+    # Core components and general settings
     paths: Paths
+    general: GeneralSettings
     debug: DebugOptions
     benchmark: BenchmarkOptions
 
     # Generation parameters
     chord_generation: ChordGeneration
     corpus_generation: CorpusGenerationConfig
+    token_analysis: TokenAnalysisConfig
+    chord_assignment: ChordAssignmentConfig
 
     # Weights
     standalone_weights: StandaloneWeights
     assignment_weights: AssignmentWeights
     set_weights: SetWeights
 
-    # Module-specific configs
-    token_analysis: TokenAnalysisConfig
-    chord_assignment: ChordAssignmentConfig
-
     # Current active settings - these are explicitly required with file extensions
     active_layout_file: str
     active_corpus_file: str
     active_tokens_file: str
+
+    # Shortcut properties
+    @property
+    def use_parallel_processing(self) -> bool:
+        """Shortcut to parallel processing setting"""
+        return self.general.use_parallel_processing
 
     @classmethod
     def load_config(
@@ -262,19 +281,20 @@ class GeneratorConfig:
         """Create config from dictionary"""
         # Check for required top-level sections
         required_sections = [
+            "active_layout_file",
+            "active_corpus_file",
+            "active_tokens_file",
             "paths",
+            "general",
             "debug",
             "benchmark",
             "chord_generation",
             "corpus_generation",
+            "token_analysis",
+            "chord_assignment",
             "standalone_weights",
             "assignment_weights",
             "set_weights",
-            "token_analysis",
-            "chord_assignment",
-            "active_layout_file",
-            "active_corpus_file",
-            "active_tokens_file",
         ]
 
         for section in required_sections:
@@ -308,6 +328,13 @@ class GeneratorConfig:
             debug_dir=Path(paths_data["debug_dir"]),
             results_dir=Path(paths_data["results_dir"]),
             cache_dir=Path(paths_data["cache_dir"]),
+        )
+
+        # Parse general settings
+        general_data = data["general"]
+        general = GeneralSettings(
+            use_parallel_processing=general_data.get("use_parallel_processing", True),
+            chords_to_assign=general_data.get("chords_to_assign", 100),
         )
 
         # Parse debug options
@@ -380,12 +407,9 @@ class GeneratorConfig:
             min_token_length=token_data["min_token_length"],
             max_token_length=token_data["max_token_length"],
             top_n_tokens=token_data["top_n_tokens"],
-            include_characters=token_data["include_characters"],
-            include_character_ngrams=token_data["include_character_ngrams"],
-            include_words=token_data["include_words"],
-            include_token_ngrams=token_data["include_token_ngrams"],
-            use_parallel_processing=token_data["use_parallel_processing"],
-            length_benefit_exponent=token_data.get("length_benefit_exponent", 1.5),
+            scoring_complexity=TokenScoringComplexity[
+                token_data.get("scoring_complexity", "SIMPLE").upper()
+            ],
         )
 
         # Parse chord assignment config
@@ -426,6 +450,7 @@ class GeneratorConfig:
         # Build the complete config
         return cls(
             paths=paths,
+            general=general,
             debug=debug,
             benchmark=benchmark,
             chord_generation=chord_generation,
@@ -458,6 +483,10 @@ class GeneratorConfig:
                 "results_dir": str(self.paths.results_dir),
                 "cache_dir": str(self.paths.cache_dir),
             },
+            "general": {
+                "use_parallel_processing": self.general.use_parallel_processing,
+                "chords_to_assign": self.general.chords_to_assign,
+            },
             "debug": {
                 "enabled": self.debug.enabled,
                 "log_level": self.debug.log_level.name,
@@ -483,6 +512,12 @@ class GeneratorConfig:
                 "categories": self.corpus_generation.categories,
                 "api_keys": self.corpus_generation.api_keys,
             },
+            "token_analysis": {
+                "min_token_length": self.token_analysis.min_token_length,
+                "max_token_length": self.token_analysis.max_token_length,
+                "top_n_tokens": self.token_analysis.top_n_tokens,
+                "scoring_complexity": self.token_analysis.scoring_complexity.name.lower(),
+            },
             "standalone_weights": {
                 metric_type.name: weight
                 for metric_type, weight in self.standalone_weights.weights.items()
@@ -494,17 +529,6 @@ class GeneratorConfig:
             "set_weights": {
                 metric_type.name: weight
                 for metric_type, weight in self.set_weights.weights.items()
-            },
-            "token_analysis": {
-                "min_token_length": self.token_analysis.min_token_length,
-                "max_token_length": self.token_analysis.max_token_length,
-                "top_n_tokens": self.token_analysis.top_n_tokens,
-                "include_characters": self.token_analysis.include_characters,
-                "include_character_ngrams": self.token_analysis.include_character_ngrams,
-                "include_words": self.token_analysis.include_words,
-                "include_token_ngrams": self.token_analysis.include_token_ngrams,
-                "use_parallel_processing": self.token_analysis.use_parallel_processing,
-                "length_benefit_exponent": self.token_analysis.length_benefit_exponent,
             },
             "chord_assignment": {
                 "algorithm": self.chord_assignment.algorithm,
@@ -633,6 +657,12 @@ class GeneratorConfig:
             or self.chord_assignment.crossover_rate > 1
         ):
             raise ValueError("crossover_rate must be between 0 and 1")
+
+        # Validate general settings
+        if self.general.chords_to_assign < 1:
+            raise ValueError("chords_to_assign must be at least 1")
+        if self.general.chords_to_assign > self.token_analysis.top_n_tokens:
+            raise ValueError("chords_to_assign cannot exceed top_n_tokens")
 
         # Validate active settings by checking that the referenced files exist
         try:

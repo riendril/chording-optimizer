@@ -8,7 +8,6 @@ building are working for now).
 import argparse
 import logging
 
-from src.analyzing.token_scoring import score_token_collection
 from src.common.config import GeneratorConfig
 from src.token_generation.corpus_generator import generate_corpus
 from src.token_generation.token_context import add_context_to_file
@@ -28,14 +27,11 @@ def run_pipeline_stage(config: GeneratorConfig, stage: str):
         logger.info("Generating corpus...")
         generate_corpus(config)
     elif stage == "token_extraction":
-        logger.info("Extracting tokens...")
+        logger.info("Extracting, scoring and ordering tokens...")
         extract_tokens(config)
     elif stage == "token_context":
         logger.info("Adding context to tokens...")
         add_context_to_file(config)
-    elif stage == "token_scoring":
-        logger.info("Scoring tokens...")
-        score_token_collection(config)
     elif stage == "chords_generation":
         logger.info("Generating chords...")
         # Implementation for chord generation will go here
@@ -67,7 +63,6 @@ def main():
             "corpus_generation",
             "token_extraction",
             "token_context",
-            "token_scoring",
             "chords_generation",
             "assignment",
             "analysis",
@@ -94,6 +89,11 @@ def main():
         "-v", "--verbose", action="store_true", help="Enable verbose output"
     )
 
+    # Add parallel processing override
+    parser.add_argument(
+        "--no-parallel", action="store_true", help="Disable parallel processing"
+    )
+
     args = parser.parse_args()
 
     # Load configuration
@@ -111,6 +111,10 @@ def main():
         config.chord_assignment.algorithm = args.algorithm
         logger.debug(f"Using algorithm from command line argument: {args.algorithm}")
 
+    if args.no_parallel:
+        config.general.use_parallel_processing = False
+        logger.debug("Parallel processing disabled via command line")
+
     # Determine pipeline stages to run
     stages = []
     if args.stages:
@@ -121,7 +125,6 @@ def main():
             "corpus_generation",
             "token_extraction",
             "token_context",
-            "token_scoring",
             "chords_generation",
             "assignment",
             "analysis",
