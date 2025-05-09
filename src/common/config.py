@@ -9,16 +9,15 @@ This module provides YAML-based configuration management for the chord generator
 
 import logging
 import os
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import yaml
 
 from src.common.shared_types import (
     AssignmentMetricType,
-    Finger,
     SetMetricType,
     StandaloneMetricType,
     TokenType,
@@ -33,9 +32,9 @@ class LogLevel(Enum):
 
 
 class TokenScoringComplexity(Enum):
-    SIMPLE = "simple"  # Just length and frequency
-    LAYOUT_AWARE = "layout_aware"  # Include typing comfort based on layout
-    ADVANCED = "advanced"  # Include full metrics from keyboard layout community
+    SIMPLE = auto()  # Just length and frequency
+    LAYOUT_AWARE = auto()  # Include typing comfort based on layout
+    ADVANCED = auto()  # Include full metrics from keyboard layout community
 
 
 @dataclass
@@ -102,12 +101,10 @@ class GeneralSettings:
     """General settings that apply across the pipeline"""
 
     # Performance settings
-    use_parallel_processing: bool = True
+    use_parallel_processing: bool
 
     # Assignment settings
-    chords_to_assign: int = (
-        100  # Number of chords to assign (default: one tenth of top tokens)
-    )
+    chords_to_assign: int
 
 
 @dataclass
@@ -116,7 +113,7 @@ class DebugOptions:
 
     enabled: bool
     log_level: LogLevel
-    log_file: Optional[str]  # Just the filename, not the full path
+    log_file: Optional[str]
     print_cost_details: bool
     save_intermediate_results: bool
 
@@ -179,10 +176,8 @@ class TokenAnalysisConfig:
     min_token_length: int
     max_token_length: int
     top_n_tokens: int
-    scoring_complexity: TokenScoringComplexity = TokenScoringComplexity.SIMPLE
-    learning_limit_type: TokenType = (
-        TokenType.WORD_WITH_SPACE
-    )  # Maximum token type complexity to learn
+    scoring_complexity: TokenScoringComplexity
+    learning_limit_type: TokenType
 
 
 @dataclass
@@ -208,14 +203,14 @@ class ChordAssignmentConfig:
     middle_index_stretch_weight: float
 
     # Context and selection algorithm parameters
-    context_weight: float = 0.2  # Weight for context influence on scoring
+    context_weight: float
 
     # Genetic algorithm parameters
-    population_size: int = 50  # Genetic algorithm population size
-    generations: int = 100  # Number of generations for genetic algorithm
-    elite_count: int = 5  # Number of elite individuals to preserve unchanged
-    mutation_rate: float = 0.1  # Probability of mutation for each token
-    crossover_rate: float = 0.7  # Probability of crossover for each pair
+    population_size: int
+    generations: int
+    elite_count: int
+    mutation_rate: float
+    crossover_rate: float
 
 
 @dataclass
@@ -337,8 +332,8 @@ class GeneratorConfig:
         # Parse general settings
         general_data = data["general"]
         general = GeneralSettings(
-            use_parallel_processing=general_data.get("use_parallel_processing", True),
-            chords_to_assign=general_data.get("chords_to_assign", 100),
+            use_parallel_processing=general_data["use_parallel_processing"],
+            chords_to_assign=general_data["chords_to_assign"],
         )
 
         # Parse debug options
@@ -346,7 +341,7 @@ class GeneratorConfig:
         debug = DebugOptions(
             enabled=debug_data["enabled"],
             log_level=LogLevel[debug_data["log_level"]],
-            log_file=debug_data.get("log_file"),
+            log_file=debug_data["log_file"],
             print_cost_details=debug_data["print_cost_details"],
             save_intermediate_results=debug_data["save_intermediate_results"],
         )
@@ -411,12 +406,8 @@ class GeneratorConfig:
             min_token_length=token_data["min_token_length"],
             max_token_length=token_data["max_token_length"],
             top_n_tokens=token_data["top_n_tokens"],
-            scoring_complexity=TokenScoringComplexity[
-                token_data.get("scoring_complexity", "SIMPLE").upper()
-            ],
-            learning_limit_type=TokenType[
-                token_data.get("learning_limit_type", "WORD_WITH_SPACE")
-            ],
+            scoring_complexity=TokenScoringComplexity[token_data["scoring_complexity"]],
+            learning_limit_type=TokenType[token_data["learning_limit_type"]],
         )
 
         # Parse chord assignment config
@@ -441,12 +432,12 @@ class GeneratorConfig:
             pinky_ring_stretch_weight=assign_data["pinky_ring_stretch_weight"],
             ring_middle_scissor_weight=assign_data["ring_middle_scissor_weight"],
             middle_index_stretch_weight=assign_data["middle_index_stretch_weight"],
-            context_weight=assign_data.get("context_weight", 0.2),
-            population_size=assign_data.get("population_size", 50),
-            generations=assign_data.get("generations", 100),
-            elite_count=assign_data.get("elite_count", 5),
-            mutation_rate=assign_data.get("mutation_rate", 0.1),
-            crossover_rate=assign_data.get("crossover_rate", 0.7),
+            context_weight=assign_data["context_weight"],
+            population_size=assign_data["population_size"],
+            generations=assign_data["generations"],
+            elite_count=assign_data["elite_count"],
+            mutation_rate=assign_data["mutation_rate"],
+            crossover_rate=assign_data["crossover_rate"],
         )
 
         # Get active settings with file extensions
@@ -523,7 +514,7 @@ class GeneratorConfig:
                 "min_token_length": self.token_analysis.min_token_length,
                 "max_token_length": self.token_analysis.max_token_length,
                 "top_n_tokens": self.token_analysis.top_n_tokens,
-                "scoring_complexity": self.token_analysis.scoring_complexity.name.lower(),
+                "scoring_complexity": self.token_analysis.scoring_complexity.name,
                 "learning_limit_type": self.token_analysis.learning_limit_type.name,
             },
             "standalone_weights": {

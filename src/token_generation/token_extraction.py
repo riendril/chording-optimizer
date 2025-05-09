@@ -2,9 +2,9 @@
 Token extraction, counting, and scoring module.
 
 This module processes corpus text to:
-1. Extract all possible tokens within min/max length constraints
+1. Extract all possible tokens within min/max length constraints using a sliding window approach
 2. Score tokens based on frequency and length
-3. Apply subtoken/supertoken adjustments
+3. Select tokens to be assigned to chords while making subtoken/supertoken adjustments
 4. Output a ranked list of tokens for chord assignment
 """
 
@@ -12,10 +12,8 @@ import logging
 import multiprocessing
 import os
 import re
-import string
-from collections import Counter, defaultdict
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from collections import Counter
+from typing import List, Tuple
 
 import tqdm
 
@@ -26,60 +24,60 @@ from src.common.shared_types import TokenCollection, TokenData, TokenType
 logger = logging.getLogger(__name__)
 
 
-# Data structure for interval tracking
-class IntervalSet:
-    """Efficient data structure for tracking intervals in a text
+def extract_words_from_text(text: str) -> set[str]:
+    """Extract real words from text using word boundaries.
 
-    This is used to avoid double-counting tokens during extraction.
+    Args:
+        text: Text to extract words from
+
+    Returns:
+        set of lowercase words found in the text
     """
+    # Regular expression to find words (sequences of letters)
+    # \b represents word boundary
+    word_pattern = r"\b[a-zA-Z]+\b"
+    words = re.findall(word_pattern, text)
 
-    def __init__(self):
-        self.intervals = []  # List of (start, end) tuples
+    # Convert to lowercase and store in a set for efficient lookup
+    return {word.lower() for word in words}
 
-    def add_interval(self, start: int, end: int) -> bool:
-        """Add an interval if it doesn't overlap with existing intervals
 
-        Args:
-            start: Start position of interval
-            end: End position of interval
+def classify_token(token: str, word_set: set[str]) -> TokenType:
+    """Classify a token into its type category using word context.
 
-        Returns:
-            True if interval was added, False if it overlaps with existing interval
-        """
-        # Check for overlaps using binary search (O(log n))
-        idx = self._find_insertion_index(start)
+    Args:
+        token: The token string to classify
+        word_set: set of known words from the corpus
 
-        # Check if this interval overlaps with previous interval
-        if idx > 0 and self.intervals[idx - 1][1] > start:
-            return False
+    Returns:
+        TokenType enumeration value
+    """
+    # Single character
+    if len(token) == 1:
+        return TokenType.SINGLE_CHARACTER
 
-        # Check if this interval overlaps with next interval
-        if idx < len(self.intervals) and self.intervals[idx][0] < end:
-            return False
+    # Check if token is in our set of known words
+    token_lower = token.lower()
+    token_without_space = token_lower.rstrip()
 
-        # Insert the interval at the correct position
-        self.intervals.insert(idx, (start, end))
-        return True
+    # Full word check (using our word set for validation)
+    if token_lower in word_set:
+        return TokenType.FULL_WORD
 
-    def _find_insertion_index(self, start: int) -> int:
-        """Binary search to find insertion index for a new interval
+    # Word followed by space
+    if token_lower.endswith(" ") and token_without_space in word_set:
+        return TokenType.WORD_WITH_SPACE
 
-        Args:
-            start: Start position of interval
+    # Check if it consists only of letters (but not a known word)
+    if token.isalpha():
+        return TokenType.NGRAM_LETTERS_ONLY
 
-        Returns:
-            Index where the interval should be inserted
-        """
-        left, right = 0, len(self.intervals)
+    # Check if it's an n-gram with no letters
+    if not any(c.isalpha() for c in token):
+        return TokenType.NGRAM_NO_LETTERS
 
-        while left < right:
-            mid = (left + right) // 2
-            if self.intervals[mid][0] < start:
-                left = mid + 1
-            else:
-                right = mid
-
-        return left
+    # Default case
+    return TokenType.OTHER
 
 
 # Trie node for efficient subtoken/supertoken detection
@@ -95,6 +93,8 @@ class TrieNode:
 
 class Trie:
     """Trie data structure for efficient subtoken/supertoken detection"""
+
+    # TODO: Check if this is legit
 
     def __init__(self):
         self.root = TrieNode()
@@ -126,6 +126,7 @@ class Trie:
             List of (index, TokenData) pairs for all subtokens
         """
         results = []
+        # TODO: check if this function is legit
 
         # For each starting position in the token
         for i in range(len(token)):
@@ -144,103 +145,372 @@ class Trie:
 
         return results
 
+    def find_supertokens(
+        self, token: str, collection: TokenCollection
+    ) -> List[TokenData]:
+        """Find all supertokens that contain this token as a substring
+
+        Args:
+            token: Token to search for as a substring
+            collection: TokenCollection containing all tokens to search within
+
+        Returns:
+            List of TokenData objects for tokens that contain the input token
+        """
+        return [
+            other_token
+            for other_token in collection.tokens
+            if token in other_token.lower and other_token.lower != token
+        ]
+
+
+def extract_tokens_sliding_window(
+    text: str,
+    min_length: int,
+    max_length: int,
+    token_collection: TokenCollection,
+    word_set: set[str],
+):
+    """Extract all tokens using a sliding window approach with classification
+
+    Args:
+        text: Text to extract tokens from
+        min_length: Minimum token length to include
+        max_length: Maximum token length to include
+        token_collection: TokenCollection to update with tokens
+        word_set: set of known words from the corpus
+    """
+    # Create a temporary counter for frequency tracking
+    temp_counter = Counter()
+
+    # Step 1: Sliding window extraction for all possible tokens
+    for length in range(min_length, max_length + 1):
+        for i in range(len(text) - length + 1):
+            end = i + length
+            token = text[i:end]
+            # Count the token
+            temp_counter[token] += 1
+
+    # Step 2: Convert to TokenData objects and update collection
+    for token, count in temp_counter.items():
+        # Check if token already exists in collection
+        existing_tokens = [
+            t for t in token_collection.tokens if t.lower == token.lower()
+        ]
+        assert len(existing_tokens) <= 1
+        if existing_tokens:
+            # Update count of existing token
+            existing_tokens[0].count += count
+        else:
+            # Create new TokenData object directly
+            token_data = TokenData(
+                lower=token.lower(),
+                length=len(token),
+                token_type=classify_token(token, word_set),
+                count=count,
+                rank=0,  # Rank will be assigned later
+                score=0.0,  # Score will be calculated later
+                selected=False,
+            )
+            token_collection.tokens.append(token_data)
+
 
 # Function defined at module level for multiprocessing compatibility
-def process_chunk(chunk, min_length, max_length):
+def process_chunk(chunk, min_length, max_length, word_set):
     """Process a single text chunk for token extraction.
 
     Args:
         chunk: Text chunk to process
         min_length: Minimum token length to include
         max_length: Maximum token length to include
+        word_set: set of known words from the corpus
 
     Returns:
-        Counter of token frequencies
+        TokenCollection with tokens extracted from the chunk
     """
-    result = Counter()
+    token_collection = TokenCollection(
+        name="chunk_extraction",
+        tokens=[],
+        ordered_by_frequency=False,
+        source="chunk_processing",
+    )
 
-    # Extract tokens with efficient non-overlapping algorithm
-    extract_tokens_efficiently(chunk, min_length, max_length, result)
+    # Extract tokens using sliding window approach
+    extract_tokens_sliding_window(
+        chunk, min_length, max_length, token_collection, word_set
+    )
 
-    return result
+    return token_collection
 
 
-def extract_tokens_efficiently(
-    text: str, min_length: int, max_length: int, token_counts: Counter
-):
-    """Extract tokens from text with O(n log n) efficiency, avoiding double-counting
+def _extract_tokens_parallel(
+    text: str,
+    min_length: int,
+    max_length: int,
+    word_set: set[str],
+    benchmark: Benchmark,
+) -> TokenCollection:
+    """Extract tokens using parallel processing"""
+    # Split text into chunks
+    cpu_count = multiprocessing.cpu_count()
+    chunk_size = max(1000, len(text) // cpu_count)
+
+    # Add overlap to ensure we don't miss tokens at boundaries
+    overlap = max_length - 1
+
+    # Create overlapping chunks
+    chunks = []
+    for i in range(0, len(text), chunk_size):
+        chunk_end = min(i + chunk_size + overlap, len(text))
+        chunks.append(text[i:chunk_end])
+
+    logger.info(f"Processing text in {len(chunks)} parallel chunks...")
+
+    # Create process pool
+    with multiprocessing.Pool() as pool:
+        # Process each chunk with progress indication
+        results = []
+
+        for chunk in chunks:
+            results.append(
+                pool.apply_async(
+                    process_chunk, args=(chunk, min_length, max_length, word_set)
+                )
+            )
+
+        # Collect results with progress bar
+        combined_collection = TokenCollection(
+            name="parallel_extraction",
+            tokens=[],
+            ordered_by_frequency=False,
+            source="parallel_processing",
+        )
+
+        for result in tqdm.tqdm(results, desc="Processing chunks"):
+            chunk_collection = result.get()
+
+            # Merge chunk's tokens into the combined collection
+            for token_data in chunk_collection.tokens:
+                existing_token = next(
+                    (
+                        t
+                        for t in combined_collection.tokens
+                        if t.lower == token_data.lower
+                    ),
+                    None,
+                )
+
+                if existing_token:
+                    # Update count of existing token
+                    existing_token.count += token_data.count
+                else:
+                    # Add new token to collection
+                    combined_collection.tokens.append(token_data)
+
+            benchmark.update_phase(len(combined_collection.tokens))
+
+    return combined_collection
+
+
+def extract_all_tokens(
+    text: str,
+    min_length: int,
+    max_length: int,
+    use_parallel: bool,
+    benchmark: Benchmark,
+) -> TokenCollection:
+    """Extract all possible tokens within length constraints
 
     Args:
-        text: Text to extract tokens from
+        text: Input corpus text
         min_length: Minimum token length to include
         max_length: Maximum token length to include
-        token_counts: Counter to update with tokens
+        use_parallel: Whether to use parallel processing
+        benchmark: Benchmark instance for performance tracking
+
+    Returns:
+        TokenCollection with all extracted tokens
     """
-    # Use IntervalSet to track which parts of text have been processed
-    intervals = IntervalSet()
+    # Create a new token collection
+    token_collection = TokenCollection(
+        name="corpus_extraction",
+        tokens=[],
+        ordered_by_frequency=False,
+        source="extract_all_tokens",
+    )
 
-    # Priority order for token types (highest to lowest priority)
-    # 1. Words followed by space
-    # 2. Complete words
-    # 3. Word n-grams
-    # 4. Character n-grams
+    # Extract words from the text for linguistic context
+    logger.info("Extracting words from corpus using word boundaries")
+    word_set = extract_words_from_text(text)
+    logger.info(f"Extracted {len(word_set)} unique words from corpus")
 
-    # First extract and track word positions (for classification)
-    word_positions = []
-    for match in re.finditer(r"\b\w+\b", text):
-        start, end = match.span()
-        word = match.group()
-        word_positions.append((start, end, word))
+    # Process in parallel or sequentially
+    if use_parallel and len(text) > 100000:  # Only parallelize for large corpora
+        return _extract_tokens_parallel(
+            text, min_length, max_length, word_set, benchmark
+        )
 
-        # If word meets length criteria, count it and mark its interval
-        if min_length <= len(word) <= max_length:
-            token_counts[word] += 1
-            intervals.add_interval(start, end)
+    logger.info("Extracting tokens using sliding window approach...")
+    # Use sliding window extraction
+    extract_tokens_sliding_window(
+        text, min_length, max_length, token_collection, word_set
+    )
+    benchmark.update_phase(len(token_collection.tokens))
 
-        # Check for "word followed by space"
-        if end < len(text) and text[end] == " ":
-            word_space = word + " "
-            if min_length <= len(word_space) <= max_length:
-                token_counts[word_space] += 1
-                intervals.add_interval(start, end + 1)  # Include the space
+    return token_collection
 
-    # Process word n-grams efficiently
-    words = [word for _, _, word in word_positions]
-    for n in range(2, 4):  # 2-3 word phrases
-        for i in range(len(words) - n + 1):
-            # Find the start and end positions of this n-gram
-            start_pos = word_positions[i][0]
-            end_pos = word_positions[i + n - 1][1]
 
-            # Only process if this n-gram fits the length criteria
-            ngram = " ".join(words[i : i + n])
-            if min_length <= len(ngram) <= max_length:
-                # Check if this interval has already been covered
-                if intervals.add_interval(start_pos, end_pos):
-                    token_counts[ngram] += 1
+def score_tokens(token_collection: TokenCollection) -> TokenCollection:
+    """Score tokens based on frequency and length
 
-    # Process character n-grams that haven't been covered
-    # We'll process in small chunks for better performance
-    chunk_size = 100
-    for chunk_start in range(0, len(text), chunk_size):
-        chunk_end = min(chunk_start + chunk_size + max_length, len(text))
-        chunk = text[chunk_start:chunk_end]
+    Args:
+        token_collection: TokenCollection with tokens to score
 
-        # For each possible n-gram length
-        for n in range(min_length, max_length + 1):
-            # For each possible starting position
-            for i in range(len(chunk) - n + 1):
-                abs_start = chunk_start + i
-                abs_end = abs_start + n
+    Returns:
+        TokenCollection with updated scores
+    """
+    # Find total token count for normalization
+    total_count = sum(token.count for token in token_collection.tokens)
 
-                # Only process if this interval hasn't been covered yet
-                if intervals.add_interval(abs_start, abs_end):
-                    ngram = chunk[i : i + n]
-                    # Skip n-grams with non-printable chars or excessive whitespace
-                    if all(c in string.printable for c in ngram) and not re.search(
-                        r"\s{2,}", ngram
-                    ):
-                        token_counts[ngram] += 1
+    # Calculate scores
+    for token in tqdm.tqdm(token_collection.tokens, desc="Scoring tokens"):
+        # Base score is normalized frequency
+        frequency_score = token.count / total_count
+
+        # Multiply by length for length benefit
+        token.score = frequency_score * token.length
+
+    return token_collection
+
+
+def select_tokens_and_adjust(
+    token_collection: TokenCollection,
+    top_n: int,
+    learning_limit: TokenType,
+    chords_to_assign: int,
+    benchmark: Benchmark,
+) -> TokenCollection:
+    """Apply subtoken/supertoken adjustments using a trie, respecting learning limit
+
+    Args:
+        token_collection: Collection containing all tokens
+        top_n: Number of top tokens to consider
+        learning_limit: Maximum token type complexity to consider
+        chords_to_assign: Number of tokens/chords to assign
+        benchmark: Benchmark instance for performance tracking
+
+    Returns:
+        Adjusted token collection
+    """
+    # Sort tokens by score if they aren't already
+    sorted_tokens = sorted(token_collection.tokens, key=lambda t: t.score, reverse=True)
+
+    # Take top N tokens only
+    top_tokens = sorted_tokens[:top_n]
+
+    # set ranks for the top tokens
+    for i, token in enumerate(top_tokens):
+        token.rank = i + 1
+
+    # Make a deep copy of the top tokens
+    token_list = [
+        TokenData(
+            lower=t.lower,
+            length=t.length,
+            token_type=t.token_type,
+            count=t.count,
+            rank=t.rank,
+            score=t.score,
+            selected=t.selected,
+        )
+        for t in top_tokens
+    ]
+
+    # Filter out eligible tokens based on learning limit
+    logger.info(f"Filtering tokens based on learning limit: {learning_limit.name}")
+    eligible_tokens = sorted(
+        [t for t in token_list if t.token_type <= learning_limit],
+        key=lambda t: t.score,
+        reverse=True,
+    )
+
+    # Log statistics about eligible tokens
+    token_type_counts = {t.name: 0 for t in TokenType}
+    for t in token_list:
+        token_type_counts[t.token_type.name] += 1
+
+    logger.info(f"Token type distribution: {token_type_counts}")
+    logger.info(
+        f"Eligible tokens for adjustment: {len(eligible_tokens)} out of {len(token_list)}"
+    )
+
+    # Build trie for efficient token relationship detection
+    logger.info("Building trie for token relationships...")
+    token_trie = Trie()
+    for i, token in enumerate(token_list):
+        token_trie.insert(token, i)
+
+    # Create a new collection for selection and adjustment
+    temp_collection = TokenCollection(
+        name=token_collection.name,
+        tokens=token_list,
+        ordered_by_frequency=True,
+        source=token_collection.source,
+    )
+
+    # Select tokens while adjusting related tokens
+    logger.info("Selecting and rescoring tokens")
+    selected_count = 0
+
+    # While there are less than the configured amount of desired chords selected:
+    for _ in tqdm.tqdm(range(chords_to_assign), desc="Selecting tokens"):
+        if not eligible_tokens or selected_count >= chords_to_assign:
+            break
+
+        # Select the current highest not yet selected token
+        token = eligible_tokens.pop(0)
+        token.selected = True
+        selected_count += 1
+
+        # Find subtokens of this token
+        subtokens = token_trie.find_subtokens(token.lower)
+        for _, subtoken in subtokens:
+            # Adjust count and score of subtokens
+            subtoken.count -= token.count
+            subtoken.score = (subtoken.count / len(token_list)) * subtoken.length
+
+        # Find supertokens that contain this token
+        supertokens = token_trie.find_supertokens(token.lower, temp_collection)
+        # Do nothing with them for now
+        # TODO: This function needs to take into account supertokens that
+        # contain the token multiple times somehow
+
+        # Resort tokens by adjusted score
+        eligible_tokens.sort(
+            key=lambda t: t.score,
+            reverse=True,
+        )
+
+        benchmark.update_phase(selected_count)
+
+    # Re-sort all tokens by adjusted score and selection status
+    token_list.sort(key=lambda t: (-1 if t.selected else 0, t.score), reverse=True)
+
+    # Update ranks
+    for i, token in enumerate(token_list):
+        token.rank = i + 1
+
+    # Log selection statistics
+    selected = [t for t in token_list if t.selected]
+    logger.info(f"Selected {len(selected)} tokens out of {len(token_list)}")
+
+    # Create new collection with adjusted tokens
+    return TokenCollection(
+        name=f"{token_collection.name}_adjusted",
+        tokens=token_list,
+        ordered_by_frequency=True,
+        source=token_collection.source,
+    )
 
 
 def extract_tokens(config: GeneratorConfig) -> None:
@@ -265,7 +535,7 @@ def extract_tokens(config: GeneratorConfig) -> None:
     # Extract all tokens within length constraints
     logger.info("Extracting tokens from corpus")
     benchmark.start_phase(BenchmarkPhase.INITIALIZATION)
-    token_counts = extract_all_tokens(
+    token_collection = extract_all_tokens(
         corpus_text,
         config.token_analysis.min_token_length,
         config.token_analysis.max_token_length,
@@ -277,22 +547,19 @@ def extract_tokens(config: GeneratorConfig) -> None:
     # Score tokens based on frequency and length
     logger.info("Scoring tokens")
     benchmark.start_phase(BenchmarkPhase.CHORD_COST_CALCULATION)
-    token_scores = score_tokens(token_counts)
+    token_collection = score_tokens(token_collection)
     benchmark.end_phase()
 
-    # Get initial top tokens
-    logger.info(f"Selecting top {config.token_analysis.top_n_tokens} tokens")
-    initial_top_tokens = get_top_n_tokens(
-        token_scores, token_counts, config.token_analysis.top_n_tokens
-    )
-
     # Apply subtoken/supertoken adjustments based on learning limit
-    logger.info("Applying subtoken/supertoken adjustments")
+    logger.info(
+        f"Selecting and adjusting top {config.token_analysis.top_n_tokens} tokens"
+    )
     benchmark.start_phase(BenchmarkPhase.SET_IMPROVEMENT)
-    final_tokens = apply_token_adjustments_with_limit(
-        initial_top_tokens,
-        token_counts,
+    final_tokens = select_tokens_and_adjust(
+        token_collection,
+        config.token_analysis.top_n_tokens,
         config.token_analysis.learning_limit_type,
+        config.general.chords_to_assign,
         benchmark,
     )
     benchmark.end_phase()
@@ -314,240 +581,3 @@ def extract_tokens(config: GeneratorConfig) -> None:
         logger.info(f"Benchmark results: {results}")
 
     logger.info("Token extraction completed successfully")
-
-
-def extract_all_tokens(
-    text: str,
-    min_length: int,
-    max_length: int,
-    use_parallel: bool,
-    benchmark: Benchmark,
-) -> Dict[str, int]:
-    """Extract all possible tokens within length constraints
-
-    Args:
-        text: Input corpus text
-        min_length: Minimum token length to include
-        max_length: Maximum token length to include
-        use_parallel: Whether to use parallel processing
-        benchmark: Benchmark instance for performance tracking
-
-    Returns:
-        Dictionary mapping tokens to their frequency counts
-    """
-    # Normalize text
-    text = text.lower()
-
-    # Process in parallel or sequentially
-    if use_parallel and len(text) > 100000:  # Only parallelize for large corpora
-        return _extract_tokens_parallel(text, min_length, max_length, benchmark)
-
-    token_counts = Counter()
-
-    logger.info("Extracting tokens (efficient non-overlapping algorithm)...")
-    # Use efficient non-overlapping extraction
-    extract_tokens_efficiently(text, min_length, max_length, token_counts)
-    benchmark.update_phase(len(token_counts))
-
-    return token_counts
-
-
-def _extract_tokens_parallel(
-    text: str, min_length: int, max_length: int, benchmark: Benchmark
-) -> Dict[str, int]:
-    """Extract tokens using parallel processing"""
-    # Split text into chunks
-    cpu_count = multiprocessing.cpu_count()
-    chunk_size = max(1000, len(text) // cpu_count)
-
-    # Add overlap to ensure we don't miss tokens at boundaries
-    overlap = max_length - 1
-
-    # Create overlapping chunks
-    chunks = []
-    for i in range(0, len(text), chunk_size):
-        chunk_end = min(i + chunk_size + overlap, len(text))
-        chunks.append(text[i:chunk_end])
-
-    logger.info(f"Processing text in {len(chunks)} parallel chunks...")
-
-    # Create process pool
-    with multiprocessing.Pool() as pool:
-        # Process each chunk with progress indication
-        results = []
-
-        for chunk in chunks:
-            results.append(
-                pool.apply_async(process_chunk, args=(chunk, min_length, max_length))
-            )
-
-        # Collect results with progress bar
-        combined_counts = Counter()
-        for result in tqdm.tqdm(results, desc="Processing chunks"):
-            chunk_counts = result.get()
-            combined_counts.update(chunk_counts)
-            benchmark.update_phase(len(combined_counts))
-
-    return combined_counts
-
-
-def score_tokens(token_counts: Dict[str, int]) -> Dict[str, float]:
-    """Score tokens based on frequency and length
-
-    Args:
-        token_counts: Dictionary of token frequencies
-
-    Returns:
-        Dictionary mapping tokens to their scores
-    """
-    # Find total token count for normalization
-    total_count = sum(token_counts.values())
-
-    # Calculate scores
-    scores = {}
-    for token, count in tqdm.tqdm(token_counts.items(), desc="Scoring tokens"):
-        # Base score is normalized frequency
-        frequency_score = count / total_count
-
-        # Multiply by length for length benefit
-        scores[token] = frequency_score * len(token)
-
-    return scores
-
-
-def get_top_n_tokens(
-    token_scores: Dict[str, float], token_counts: Dict[str, int], top_n: int
-) -> TokenCollection:
-    """Get the top N tokens by score
-
-    Args:
-        token_scores: Dictionary mapping tokens to their scores
-        token_counts: Dictionary mapping tokens to their frequencies
-        top_n: Number of top tokens to include
-
-    Returns:
-        TokenCollection with the top tokens
-    """
-    # Sort tokens by score in descending order
-    logger.info("Sorting tokens by score...")
-    sorted_tokens = sorted(token_scores.items(), key=lambda x: x[1], reverse=True)
-
-    # Take top N tokens
-    top_tokens = sorted_tokens[:top_n]
-
-    # Create TokenData objects
-    token_data_list = []
-    for i, (token, score) in enumerate(
-        tqdm.tqdm(top_tokens, desc="Creating token data")
-    ):
-        rank = i + 1
-
-        token_data = TokenData.from_token(
-            token=token, frequency=token_counts[token], rank=rank, score=score
-        )
-        token_data_list.append(token_data)
-
-    # Create and return the collection
-    return TokenCollection(
-        name=f"top_{top_n}_tokens",
-        tokens=token_data_list,
-        ordered_by_frequency=True,
-        source="corpus_extraction",
-    )
-
-
-def apply_token_adjustments_with_limit(
-    token_collection: TokenCollection,
-    token_counts: Dict[str, int],
-    learning_limit: TokenType,
-    benchmark: Benchmark,
-) -> TokenCollection:
-    """Apply subtoken/supertoken adjustments using a trie, respecting learning limit
-
-    Args:
-        token_collection: Initial collection of top tokens
-        token_counts: Complete dictionary of token counts
-        learning_limit: Maximum token type complexity to consider
-        benchmark: Benchmark instance for performance tracking
-
-    Returns:
-        Adjusted token collection
-    """
-    # Make a copy of the original token list
-    tokens = token_collection.tokens.copy()
-    total_count = sum(token_counts.values())
-
-    # Filter tokens based on learning limit
-    logger.info(f"Filtering tokens based on learning limit: {learning_limit.name}")
-    eligible_tokens = [t for t in tokens if t.token_type <= learning_limit]
-
-    # Log statistics about eligible tokens
-    token_type_counts = {t.name: 0 for t in TokenType}
-    for t in tokens:
-        token_type_counts[t.token_type.name] += 1
-
-    logger.info(f"Token type distribution: {token_type_counts}")
-    logger.info(
-        f"Eligible tokens for adjustment: {len(eligible_tokens)} out of {len(tokens)}"
-    )
-
-    # Build trie for efficient subtoken detection
-    logger.info("Building trie for token relationships...")
-    trie = Trie()
-    for i, token in enumerate(eligible_tokens):
-        trie.insert(token, i)
-
-    # Process tokens in order of score (highest first)
-    logger.info("Processing tokens with trie-based algorithm...")
-    processed = set()
-
-    # Process in order of initial ranking, but only for eligible tokens
-    tokens_by_score = sorted(eligible_tokens, key=lambda t: t.score, reverse=True)
-
-    for token in tqdm.tqdm(tokens_by_score, desc="Adjusting token scores"):
-        if token.lower in processed:
-            continue
-
-        processed.add(token.lower)
-
-        # Find all subtokens using trie (much more efficient)
-        subtokens = trie.find_subtokens(token.lower)
-        for idx, subtoken in subtokens:
-            if subtoken.lower in processed:
-                continue
-
-            # Adjust frequency and score
-            adjusted_freq = subtoken.frequency - token.frequency
-            subtoken.frequency = adjusted_freq
-            subtoken.score = (adjusted_freq / total_count) * len(subtoken.lower)
-
-        # Check if this token is a subtoken of any other token
-        for other_token in eligible_tokens:
-            if other_token.lower in processed or other_token.lower == token.lower:
-                continue
-
-            if token.lower in other_token.lower:
-                # If this token is contained in the other token
-                effective_length = max(
-                    1, len(other_token.lower) - (len(token.lower) - 1)
-                )
-                other_token.score = (
-                    other_token.frequency / total_count
-                ) * effective_length
-
-        benchmark.update_phase(len(processed))
-
-    # Re-sort all tokens by adjusted score
-    tokens.sort(key=lambda t: t.score, reverse=True)
-
-    # Update ranks
-    for i, token in enumerate(tokens):
-        token.rank = i + 1
-
-    # Create new collection with adjusted tokens
-    return TokenCollection(
-        name=token_collection.name,
-        tokens=tokens,
-        ordered_by_frequency=True,
-        source=token_collection.source,
-    )

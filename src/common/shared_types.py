@@ -32,38 +32,6 @@ class TokenType(IntEnum):
     NGRAM_NO_LETTERS = 4
     OTHER = 5
 
-    @classmethod
-    def classify_token(cls, token: str) -> "TokenType":
-        """Classify a token based on its content
-
-        Args:
-            token: Token to classify
-
-        Returns:
-            TokenType classification
-        """
-        if len(token) == 1:
-            return cls.SINGLE_CHARACTER
-
-        # Check if it's a word followed by space
-        if token.endswith(" ") and " " not in token[:-1] and token[:-1].isalpha():
-            return cls.WORD_WITH_SPACE
-
-        # Check if it's a full word (only letters)
-        if token.isalpha() and " " not in token:
-            return cls.FULL_WORD
-
-        # Check if it's an n-gram with only letters
-        if token.replace(" ", "").isalpha():
-            return cls.NGRAM_LETTERS_ONLY
-
-        # Check if it's an n-gram with no letters
-        if not any(c.isalpha() for c in token):
-            return cls.NGRAM_NO_LETTERS
-
-        # Default to other
-        return cls.OTHER
-
 
 @dataclass
 class KeyPosition:
@@ -78,7 +46,7 @@ class KeyPosition:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
-            "finger": self.finger.name if self.finger else None,
+            "finger": self.finger.name,
             "vertical_distance": self.vertical_distance_to_resting_position,
             "horizontal_distance": self.horizontal_distance_to_resting_position,
             "finger_to_left": self.finger_to_left.name if self.finger_to_left else None,
@@ -91,7 +59,7 @@ class KeyPosition:
     def from_dict(cls, data: Dict[str, Any], finger_enum: type) -> "KeyPosition":
         """Create from dictionary after JSON deserialization"""
         return cls(
-            finger=finger_enum[data["finger"]] if data["finger"] else None,
+            finger=finger_enum[data["finger"]],
             vertical_distance_to_resting_position=data["vertical_distance"],
             horizontal_distance_to_resting_position=data["horizontal_distance"],
             finger_to_left=(
@@ -109,56 +77,37 @@ class KeyPosition:
 class TokenData:
     """Represents preprocessed data for a token"""
 
-    original: str
     lower: str
     length: int
     token_type: TokenType
-    frequency: int = 0  # Token frequency count
-    rank: int = 0  # Token frequency rank
-    score: float = 0.0  # Token score
+    count: int
+    rank: int
+    score: float
+    selected: bool
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
-            "original": self.original,
             "lower": self.lower,
             "length": self.length,
             "token_type": self.token_type.name,
-            "frequency": self.frequency,
+            "count": self.count,
             "rank": self.rank,
             "score": self.score,
+            "selected": self.selected,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TokenData":
         """Create from dictionary after JSON deserialization"""
         return cls(
-            original=data["original"],
             lower=data["lower"],
             length=data["length"],
-            token_type=TokenType[data.get("token_type", "OTHER")],
-            frequency=data.get("frequency", 0),
-            rank=data.get("rank", 0),
-            score=data.get("score", 0.0),
-        )
-
-    @classmethod
-    def from_token(
-        cls,
-        token: str,
-        frequency: int = 0,
-        rank: int = 0,
-        score: float = 0.0,
-    ) -> "TokenData":
-        """Create from a token string with optional frequency information"""
-        return cls(
-            original=token,
-            lower=token.lower(),
-            length=len(token),
-            token_type=TokenType.classify_token(token.lower()),
-            frequency=frequency,
-            rank=rank,
-            score=score,
+            token_type=TokenType[data["token_type"]],
+            count=data["count"],
+            rank=data["rank"],
+            score=data["score"],
+            selected=data["selected"],
         )
 
 
@@ -204,7 +153,7 @@ class TokenCollection:
 
     name: str
     tokens: List[TokenData] = field(default_factory=list)
-    ordered_by_frequency: bool = True
+    ordered_by_frequency: bool = False
     source: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:

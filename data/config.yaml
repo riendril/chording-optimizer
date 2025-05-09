@@ -40,8 +40,8 @@ general:
   # Performance settings
   use_parallel_processing: true  # Use multiple CPU cores for processing
   
-  # Assignment settings
-  chords_to_assign: 100  # Number of chords to assign (default: one tenth of top tokens)
+  # Number of chords to assign
+  chords_to_assign: 100  #  Default: one tenth of top tokens
 
 #------------------------------------------------------------------------------
 # Token analysis configuration
@@ -53,11 +53,11 @@ token_analysis:
   # Maximum token length to consider
   max_token_length: 10
 
-  # Number of top-ranked tokens to include in results
-  top_n_tokens: 1000
+  # Number of top-ranked tokens to rescore during analysis and selection
+  top_n_tokens: 1000 # Default: chords to assign times 10
   
-  # Scoring complexity (simple, layout_aware, advanced)
-  scoring_complexity: "simple"  # Default: just length and frequency
+  # Scoring complexity (SIMPLE, LAYOUT_AWARE, ADVANCED)
+  scoring_complexity: "SIMPLE"  # Default: just length and frequency
   
   # Maximum token type complexity to learn (SINGLE_CHARACTER, FULL_WORD, NGRAM_LETTERS_ONLY, WORD_WITH_SPACE, NGRAM_NO_LETTERS, OTHER)
   learning_limit_type: "WORD_WITH_SPACE"  # Default: up to words followed by space
@@ -132,7 +132,7 @@ corpus_generation:
   max_length: 500
 
   # Target total corpus size in characters
-  total_corpus_size: 5000000 # 5MB
+  total_corpus_size: 5000000 # ~5MB
 
   # Relative weights for different content categories (must sum to > 0)
   categories:
