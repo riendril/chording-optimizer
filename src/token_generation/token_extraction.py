@@ -13,7 +13,7 @@ import multiprocessing
 import os
 import re
 from collections import Counter
-from typing import List, Tuple
+from typing import List
 
 import tqdm
 
@@ -88,7 +88,6 @@ class TrieNode:
         self.children = {}
         self.is_end_of_word = False
         self.token_data = None
-        self.indices = []  # Store positions where this node ends a word
 
 
 class Trie:
@@ -98,32 +97,61 @@ class Trie:
 
     def __init__(self):
         self.root = TrieNode()
+        self.token_to_supertokens = {}  # For efficient supertoken lookup
 
-    def insert(self, token_data: TokenData, index: int):
-        """Insert a token into the trie
+    def insert(self, token_data: TokenData):
+        """Insert a token into the trie and update supertoken relationships
 
         Args:
             token_data: TokenData object to insert
-            index: Position of this token in the original list
         """
         node = self.root
-        for char in token_data.lower:
+        token = token_data.lower
+
+        # Insert token into trie (standard Trie insertion)
+        for char in token:
             if char not in node.children:
                 node.children[char] = TrieNode()
             node = node.children[char]
 
         node.is_end_of_word = True
         node.token_data = token_data
-        node.indices.append(index)
 
-    def find_subtokens(self, token: str) -> List[Tuple[int, TokenData]]:
+        # Record this token as a supertoken for all its substrings
+        self._update_supertoken_relationships(token_data)
+
+    def _update_supertoken_relationships(self, supertoken_data: TokenData):
+        """Register a token as a supertoken for all its substrings
+
+        Args:
+            supertoken_data: TokenData object to register as a supertoken
+        """
+        token = supertoken_data.lower
+        token_len = len(token)
+
+        # For each position in the token
+        for i in range(token_len):
+            # For each possible substring starting at this position
+            for j in range(i + 1, token_len + 1):
+                if j - i > 1:  # Only consider meaningful substrings (length > 1)
+                    substring = token[i:j]
+
+                    # Add this token as a supertoken of this substring
+                    if substring not in self.token_to_supertokens:
+                        self.token_to_supertokens[substring] = []
+
+                    # Avoid duplicates
+                    if supertoken_data not in self.token_to_supertokens[substring]:
+                        self.token_to_supertokens[substring].append(supertoken_data)
+
+    def find_subtokens(self, token: str) -> List[TokenData]:
         """Find all subtokens within a token
 
         Args:
             token: Token to search for subtokens
 
         Returns:
-            List of (index, TokenData) pairs for all subtokens
+            List of TokenData objects for all subtokens found
         """
         results = []
         # TODO: check if this function is legit
@@ -140,28 +168,22 @@ class Trie:
                 node = node.children[char]
                 # If this is a complete token (not just a prefix)
                 if node.is_end_of_word and node.token_data.lower != token:
-                    for idx in node.indices:
-                        results.append((idx, node.token_data))
+                    results.append(node.token_data)
 
         return results
 
-    def find_supertokens(
-        self, token: str, collection: TokenCollection
-    ) -> List[TokenData]:
+    def find_supertokens(self, token: str) -> List[TokenData]:
         """Find all supertokens that contain this token as a substring
 
         Args:
             token: Token to search for as a substring
-            collection: TokenCollection containing all tokens to search within
 
         Returns:
             List of TokenData objects for tokens that contain the input token
         """
-        return [
-            other_token
-            for other_token in collection.tokens
-            if token in other_token.lower and other_token.lower != token
-        ]
+        if token in self.token_to_supertokens:
+            return self.token_to_supertokens[token]
+        return []
 
 
 def extract_tokens_sliding_window(
@@ -447,16 +469,8 @@ def select_tokens_and_adjust(
     # Build trie for efficient token relationship detection
     logger.info("Building trie for token relationships...")
     token_trie = Trie()
-    for i, token in enumerate(token_list):
-        token_trie.insert(token, i)
-
-    # Create a new collection for selection and adjustment
-    temp_collection = TokenCollection(
-        name=token_collection.name,
-        tokens=token_list,
-        ordered_by_frequency=True,
-        source=token_collection.source,
-    )
+    for token in token_list:
+        token_trie.insert(token)
 
     # Select tokens while adjusting related tokens
     logger.info("Selecting and rescoring tokens")
@@ -474,16 +488,20 @@ def select_tokens_and_adjust(
 
         # Find subtokens of this token
         subtokens = token_trie.find_subtokens(token.lower)
-        for _, subtoken in subtokens:
+        for subtoken in subtokens:
             # Adjust count and score of subtokens
             subtoken.count -= token.count
             subtoken.score = (subtoken.count / len(token_list)) * subtoken.length
 
+        # TODO: Take care of supertokens
+        # -> also of multiple occurrences
+        # TODO: Take care of overlapping tokens
+
         # Find supertokens that contain this token
-        supertokens = token_trie.find_supertokens(token.lower, temp_collection)
-        # Do nothing with them for now
-        # TODO: This function needs to take into account supertokens that
-        # contain the token multiple times somehow
+        supertokens = token_trie.find_supertokens(token.lower)
+        for supertoken in supertokens:
+            occurrences = supertoken.lower.count(token.lower)
+            # Do nothing with them for now
 
         # Resort tokens by adjusted score
         eligible_tokens.sort(
