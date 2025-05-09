@@ -222,17 +222,22 @@ def extract_tokens_sliding_window(
         assert len(existing_tokens) <= 1
         if existing_tokens:
             # Update count of existing token
-            existing_tokens[0].count += count
+            existing_tokens[0].text_count += count
+            existing_tokens[0].usage_count += count
         else:
             # Create new TokenData object directly
             token_data = TokenData(
                 lower=token.lower(),
                 length=len(token),
                 token_type=classify_token(token, word_set),
-                count=count,
+                text_count=count,
+                usage_count=count,
                 rank=0,  # Rank will be assigned later
                 score=0.0,  # Score will be calculated later
                 selected=False,
+                best_current_combination=list(
+                    token.lower()
+                ),  # Initialize with single characters
             )
             token_collection.tokens.append(token_data)
 
@@ -324,7 +329,8 @@ def _extract_tokens_parallel(
 
                 if existing_token:
                     # Update count of existing token
-                    existing_token.count += token_data.count
+                    existing_token.text_count += token_data.text_count
+                    existing_token.usage_count += token_data.text_count
                 else:
                     # Add new token to collection
                     combined_collection.tokens.append(token_data)
@@ -391,13 +397,16 @@ def score_tokens(token_collection: TokenCollection) -> TokenCollection:
     Returns:
         TokenCollection with updated scores
     """
+    # TODO: Do normalization with just text length instead and pass it to this
+    # function as an int
+
     # Find total token count for normalization
-    total_count = sum(token.count for token in token_collection.tokens)
+    total_count = sum(token.text_count for token in token_collection.tokens)
 
     # Calculate scores
     for token in tqdm.tqdm(token_collection.tokens, desc="Scoring tokens"):
         # Base score is normalized frequency
-        frequency_score = token.count / total_count
+        frequency_score = token.text_count / total_count
 
         # Multiply by length for length benefit
         token.score = frequency_score * token.length
@@ -440,10 +449,12 @@ def select_tokens_and_adjust(
             lower=t.lower,
             length=t.length,
             token_type=t.token_type,
-            count=t.count,
+            text_count=t.text_count,
+            usage_count=t.usage_count,
             rank=t.rank,
             score=t.score,
             selected=t.selected,
+            best_current_combination=list(t.best_current_combination),
         )
         for t in top_tokens
     ]
@@ -484,24 +495,27 @@ def select_tokens_and_adjust(
         # Select the current highest not yet selected token
         token = eligible_tokens.pop(0)
         token.selected = True
+        token.best_current_combination = [token.lower]
         selected_count += 1
 
         # Find subtokens of this token
         subtokens = token_trie.find_subtokens(token.lower)
         for subtoken in subtokens:
-            # Adjust count and score of subtokens
-            subtoken.count -= token.count
-            subtoken.score = (subtoken.count / len(token_list)) * subtoken.length
-
-        # TODO: Take care of supertokens
-        # -> also of multiple occurrences
-        # TODO: Take care of overlapping tokens
+            # Adjust usage_count and score of subtokens
+            subtoken.usage_count -= token.usage_count
+            subtoken.score = (subtoken.usage_count / len(token_list)) * subtoken.length
 
         # Find supertokens that contain this token
         supertokens = token_trie.find_supertokens(token.lower)
         for supertoken in supertokens:
             occurrences = supertoken.lower.count(token.lower)
             # Do nothing with them for now
+            # TODO: Adjust supertokens
+            # account for multiple containments
+
+        # TODO: Adjust overlapping tokens
+
+        # TODO: Update best_current_combination for all tokens
 
         # Resort tokens by adjusted score
         eligible_tokens.sort(

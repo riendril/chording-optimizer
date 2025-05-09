@@ -80,10 +80,12 @@ class TokenData:
     lower: str
     length: int
     token_type: TokenType
-    count: int
+    text_count: int
+    usage_count: int
     rank: int
     score: float
     selected: bool
+    best_current_combination: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -91,10 +93,12 @@ class TokenData:
             "lower": self.lower,
             "length": self.length,
             "token_type": self.token_type.name,
-            "count": self.count,
+            "text_count": self.text_count,
+            "usage_count": self.usage_count,
             "rank": self.rank,
             "score": self.score,
             "selected": self.selected,
+            "best_current_combination": self.best_current_combination,
         }
 
     @classmethod
@@ -104,10 +108,12 @@ class TokenData:
             lower=data["lower"],
             length=data["length"],
             token_type=TokenType[data["token_type"]],
-            count=data["count"],
+            text_count=data["text_count"],
+            usage_count=data["usage_count"],
             rank=data["rank"],
             score=data["score"],
             selected=data["selected"],
+            best_current_combination=data["best_current_combination"],
         )
 
 
