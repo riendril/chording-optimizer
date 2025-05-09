@@ -13,6 +13,7 @@ import multiprocessing
 import os
 import re
 from collections import Counter
+from functools import lru_cache
 from typing import List
 
 import tqdm
@@ -42,16 +43,22 @@ def extract_words_from_text(text: str) -> set[str]:
     return {word.lower() for word in words}
 
 
-def classify_token(token: str, word_set: set[str]) -> TokenType:
+@lru_cache(maxsize=100000)  # Cache classification results for up to 100,000 tokens
+def classify_token(token: str, word_set_id: int) -> TokenType:
     """Classify a token into its type category using word context.
+
+    This function is cached to improve performance for repeated tokens.
 
     Args:
         token: The token string to classify
-        word_set: set of known words from the corpus
+        word_set_id: A unique identifier for the word set (used for cache key)
 
     Returns:
         TokenType enumeration value
     """
+    # We need to access the word_set via the global reference
+    word_set = _word_set_for_cache
+
     # Single character
     if len(token) == 1:
         return TokenType.SINGLE_CHARACTER
@@ -78,6 +85,25 @@ def classify_token(token: str, word_set: set[str]) -> TokenType:
 
     # Default case
     return TokenType.OTHER
+
+
+# Global variable to hold the word set for caching
+_word_set_for_cache = set()
+
+
+def set_word_set_for_cache(word_set: set[str]) -> int:
+    """Set the global word set for cache and return a unique identifier.
+
+    Args:
+        word_set: The set of words to use for classification
+
+    Returns:
+        A unique identifier for this word set (used for cache key)
+    """
+    global _word_set_for_cache
+    _word_set_for_cache = word_set
+    # Using id of the set as a unique identifier
+    return id(word_set)
 
 
 # Trie node for efficient subtoken/supertoken detection
@@ -191,7 +217,8 @@ def extract_tokens_sliding_window(
     min_length: int,
     max_length: int,
     token_collection: TokenCollection,
-    word_set: set[str],
+    word_set_id: int,
+    pbar=None,
 ):
     """Extract all tokens using a sliding window approach with classification
 
@@ -200,61 +227,72 @@ def extract_tokens_sliding_window(
         min_length: Minimum token length to include
         max_length: Maximum token length to include
         token_collection: TokenCollection to update with tokens
-        word_set: set of known words from the corpus
+        word_set_id: Identifier for the word set to use in classification
+        pbar: Optional progress bar to update
     """
     # Create a temporary counter for frequency tracking
     temp_counter = Counter()
 
+    # Calculate total operations for progress reporting
+    total_ops = sum(
+        len(text) - length + 1 for length in range(min_length, max_length + 1)
+    )
+
     # Step 1: Sliding window extraction for all possible tokens
+    # Process by length for better cache locality
     for length in range(min_length, max_length + 1):
-        for i in range(len(text) - length + 1):
-            end = i + length
-            token = text[i:end]
-            # Count the token
-            temp_counter[token] += 1
+        # Extract tokens of this length
+        length_tokens = [text[i : i + length] for i in range(len(text) - length + 1)]
+
+        # Update counter in batch
+        temp_counter.update(length_tokens)
+
+        # Update progress bar if provided
+        if pbar:
+            pbar.update(len(length_tokens))
 
     # Step 2: Convert to TokenData objects and update collection
-    for token, count in temp_counter.items():
-        # Check if token already exists in collection
-        existing_tokens = [
-            t for t in token_collection.tokens if t.lower == token.lower()
-        ]
-        assert len(existing_tokens) <= 1
-        if existing_tokens:
-            # Update count of existing token
-            existing_tokens[0].text_count += count
-            existing_tokens[0].usage_count += count
-        else:
-            # Create new TokenData object directly
-            token_data = TokenData(
-                lower=token.lower(),
-                length=len(token),
-                token_type=classify_token(token, word_set),
-                text_count=count,
-                usage_count=count,
-                rank=0,  # Rank will be assigned later
-                score=0.0,  # Score will be calculated later
-                selected=False,
-                best_current_combination=list(
-                    token.lower()
-                ),  # Initialize with single characters
-            )
-            token_collection.tokens.append(token_data)
+    # Batch token classification for better performance
+    unique_tokens = list(temp_counter.keys())
+
+    # Process tokens in batches
+    token_data_list = []
+    for token in unique_tokens:
+        count = temp_counter[token]
+        token_type = classify_token(token, word_set_id)
+
+        # Create TokenData object
+        token_data = TokenData(
+            lower=token.lower(),
+            length=len(token),
+            token_type=token_type,
+            text_count=count,
+            usage_count=count,
+            rank=0,  # Rank will be assigned later
+            score=0.0,  # Score will be calculated later
+            selected=False,
+            best_current_combination=list(
+                token.lower()
+            ),  # Initialize with single characters
+        )
+        token_data_list.append(token_data)
+
+    # Update collection with all tokens at once
+    token_collection.tokens.extend(token_data_list)
 
 
 # Function defined at module level for multiprocessing compatibility
-def process_chunk(chunk, min_length, max_length, word_set):
+def process_chunk(chunk_data):
     """Process a single text chunk for token extraction.
 
     Args:
-        chunk: Text chunk to process
-        min_length: Minimum token length to include
-        max_length: Maximum token length to include
-        word_set: set of known words from the corpus
+        chunk_data: Tuple of (chunk, min_length, max_length, word_set_id, chunk_id)
 
     Returns:
         TokenCollection with tokens extracted from the chunk
     """
+    chunk, min_length, max_length, word_set_id, chunk_id = chunk_data
+
     token_collection = TokenCollection(
         name="chunk_extraction",
         tokens=[],
@@ -262,9 +300,14 @@ def process_chunk(chunk, min_length, max_length, word_set):
         source="chunk_processing",
     )
 
-    # Extract tokens using sliding window approach
+    # Create a progress bar for this chunk
+    total_ops = sum(
+        len(chunk) - length + 1 for length in range(min_length, max_length + 1)
+    )
+
+    # Extract tokens using sliding window approach (without progress bar in worker)
     extract_tokens_sliding_window(
-        chunk, min_length, max_length, token_collection, word_set
+        chunk, min_length, max_length, token_collection, word_set_id
     )
 
     return token_collection
@@ -274,7 +317,7 @@ def _extract_tokens_parallel(
     text: str,
     min_length: int,
     max_length: int,
-    word_set: set[str],
+    word_set_id: int,
     benchmark: Benchmark,
 ) -> TokenCollection:
     """Extract tokens using parallel processing"""
@@ -295,17 +338,36 @@ def _extract_tokens_parallel(
 
     # Create process pool
     with multiprocessing.Pool() as pool:
-        # Process each chunk with progress indication
+        # Process each chunk
         results = []
 
-        for chunk in chunks:
-            results.append(
-                pool.apply_async(
-                    process_chunk, args=(chunk, min_length, max_length, word_set)
-                )
-            )
+        # Create work items
+        work_items = [
+            (chunk, min_length, max_length, word_set_id, i)
+            for i, chunk in enumerate(chunks)
+        ]
 
-        # Collect results with progress bar
+        # Start processing asynchronously
+        for item in work_items:
+            results.append(pool.apply_async(process_chunk, args=(item,)))
+
+        # Create a progress bar for tracking chunks completion
+        with tqdm.tqdm(total=len(chunks), desc="Processing chunks") as pbar:
+            # Poll for completed chunks
+            completed = [False] * len(chunks)
+            while not all(completed):
+                for i, result in enumerate(results):
+                    if not completed[i] and result.ready():
+                        completed[i] = True
+                        pbar.update(1)
+
+                # Don't busy-wait
+                if not all(completed):
+                    import time
+
+                    time.sleep(0.1)
+
+        # Collect and merge results
         combined_collection = TokenCollection(
             name="parallel_extraction",
             tokens=[],
@@ -313,29 +375,28 @@ def _extract_tokens_parallel(
             source="parallel_processing",
         )
 
-        for result in tqdm.tqdm(results, desc="Processing chunks"):
-            chunk_collection = result.get()
+        # Merge token data
+        all_tokens = {}
 
-            # Merge chunk's tokens into the combined collection
-            for token_data in chunk_collection.tokens:
-                existing_token = next(
-                    (
-                        t
-                        for t in combined_collection.tokens
-                        if t.lower == token_data.lower
-                    ),
-                    None,
-                )
+        # Show a progress bar for merging results
+        with tqdm.tqdm(total=len(results), desc="Merging results") as pbar:
+            for i, result in enumerate(results):
+                chunk_collection = result.get()
 
-                if existing_token:
-                    # Update count of existing token
-                    existing_token.text_count += token_data.text_count
-                    existing_token.usage_count += token_data.text_count
-                else:
-                    # Add new token to collection
-                    combined_collection.tokens.append(token_data)
+                # Update token counts
+                for token_data in chunk_collection.tokens:
+                    token = token_data.lower
+                    if token in all_tokens:
+                        all_tokens[token].text_count += token_data.text_count
+                        all_tokens[token].usage_count += token_data.text_count
+                    else:
+                        all_tokens[token] = token_data
 
-            benchmark.update_phase(len(combined_collection.tokens))
+                benchmark.update_phase(len(all_tokens))
+                pbar.update(1)
+
+        # Convert merged tokens to list
+        combined_collection.tokens = list(all_tokens.values())
 
     return combined_collection
 
@@ -372,17 +433,28 @@ def extract_all_tokens(
     word_set = extract_words_from_text(text)
     logger.info(f"Extracted {len(word_set)} unique words from corpus")
 
+    # Set global word set for caching and get identifier
+    word_set_id = set_word_set_for_cache(word_set)
+
     # Process in parallel or sequentially
     if use_parallel and len(text) > 100000:  # Only parallelize for large corpora
         return _extract_tokens_parallel(
-            text, min_length, max_length, word_set, benchmark
+            text, min_length, max_length, word_set_id, benchmark
         )
 
     logger.info("Extracting tokens using sliding window approach...")
-    # Use sliding window extraction
-    extract_tokens_sliding_window(
-        text, min_length, max_length, token_collection, word_set
+
+    # Calculate total operations for progress reporting
+    total_ops = sum(
+        len(text) - length + 1 for length in range(min_length, max_length + 1)
     )
+
+    # Use sliding window extraction with progress bar
+    with tqdm.tqdm(total=total_ops, desc="Extracting tokens") as pbar:
+        extract_tokens_sliding_window(
+            text, min_length, max_length, token_collection, word_set_id, pbar
+        )
+
     benchmark.update_phase(len(token_collection.tokens))
 
     return token_collection
