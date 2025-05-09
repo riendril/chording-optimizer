@@ -1,0 +1,93 @@
+# Qwerty Traditional Keyboard Layout Configuration
+name: Qwerty_Traditional_US_ANSI_letters
+type: Traditional (row-staggered)
+description: "Standard QWERTY layout used on US ANSI keyboards"
+
+# Key positions as [vertical_offset, horizontal_offset]
+# Vertical offset: +1 = reach up, -1 = reach down (from home row)
+# Horizontal offset: Measured as spreading/pinching of fingers relative to the center
+positions:
+  q: [1, 0.25]
+  a: [0, 0]
+  z: [-1, -0.5]
+  w: [1, 0.25]
+  s: [0, 0]
+  x: [-1, -0.5]
+  e: [1, 0.25]
+  d: [0, 0]
+  c: [-1, 0.5]
+  r: [1, -0.25]
+  f: [0, 0]
+  v: [-1, 0.5]
+  t: [1, 0.75]
+  g: [0, 1]
+  b: [-1, 1.5]
+  y: [1, 1.25]
+  h: [0, 1]
+  n: [-1, 0.5]
+  u: [1, 0.25]
+  j: [0, 0]
+  m: [-1, -0.5]
+  i: [1, -0.25]
+  k: [0, 0]
+  o: [1, -0.25]
+  l: [0, 0]
+  p: [1, -0.25]
+
+# Finger assignments
+fingers:
+  q: L_PINKY
+  a: L_PINKY
+  z: L_PINKY
+  w: L_RING
+  s: L_RING
+  x: L_RING
+  e: L_MIDDLE
+  d: L_MIDDLE
+  c: L_MIDDLE
+  r: L_INDEX
+  f: L_INDEX
+  v: L_INDEX
+  t: L_INDEX
+  g: L_INDEX
+  b: L_INDEX
+  y: R_INDEX
+  h: R_INDEX
+  n: R_INDEX
+  u: R_INDEX
+  j: R_INDEX
+  m: R_INDEX
+  i: R_MIDDLE
+  k: R_MIDDLE
+  o: R_RING
+  l: R_RING
+  p: R_PINKY
+
+# Comfort matrix (lower is better)
+comfort:
+  q: 5
+  a: 2
+  z: 5
+  w: 4
+  s: 1
+  x: 4
+  e: 4
+  d: 0
+  c: 4
+  r: 4
+  f: 0
+  v: 4
+  t: 6
+  g: 4
+  b: 6
+  y: 6
+  h: 4
+  n: 4
+  u: 4
+  j: 0
+  m: 4
+  i: 4
+  k: 0
+  o: 4
+  l: 1
+  p: 5
