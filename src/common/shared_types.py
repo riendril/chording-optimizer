@@ -28,7 +28,7 @@ class TokenType(IntEnum):
     SINGLE_CHARACTER = 0
     FULL_WORD = 1
     NGRAM_LETTERS_ONLY = 2
-    WORD_WITH_SPACE = 3
+    WORD_FOLLOWED_BY_SPACE = 3
     NGRAM_NO_LETTERS = 4
     OTHER = 5
 

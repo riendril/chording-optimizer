@@ -73,7 +73,7 @@ def classify_token(token: str, word_set_id: int) -> TokenType:
 
     # Word followed by space
     if token_lower.endswith(" ") and token_without_space in word_set:
-        return TokenType.WORD_WITH_SPACE
+        return TokenType.WORD_FOLLOWED_BY_SPACE
 
     # Check if it consists only of letters (but not a known word)
     if token.isalpha():

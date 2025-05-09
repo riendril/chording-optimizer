@@ -38,10 +38,10 @@ paths:
 #------------------------------------------------------------------------------
 general:
   # Performance settings
-  use_parallel_processing: true  # Use multiple CPU cores for processing
-  
+  use_parallel_processing: true # Use multiple CPU cores for processing
+
   # Number of chords to assign
-  chords_to_assign: 100  #  Default: one tenth of top tokens
+  chords_to_assign: 100 #  Default: one tenth of top tokens
 
 #------------------------------------------------------------------------------
 # Token analysis configuration
@@ -55,12 +55,12 @@ token_analysis:
 
   # Number of top-ranked tokens to rescore during analysis and selection
   top_n_tokens: 1000 # Default: chords to assign times 10
-  
+
   # Scoring complexity (SIMPLE, LAYOUT_AWARE, ADVANCED)
-  scoring_complexity: "SIMPLE"  # Default: just length and frequency
-  
-  # Maximum token type complexity to learn (SINGLE_CHARACTER, FULL_WORD, NGRAM_LETTERS_ONLY, WORD_WITH_SPACE, NGRAM_NO_LETTERS, OTHER)
-  learning_limit_type: "WORD_WITH_SPACE"  # Default: up to words followed by space
+  scoring_complexity: "SIMPLE" # Default: just length and frequency
+
+  # Maximum token type complexity to learn (SINGLE_CHARACTER, FULL_WORD, NGRAM_LETTERS_ONLY, WORD_FOLLOWED_BY_SPACE, NGRAM_NO_LETTERS, OTHER)
+  learning_limit_type: "WORD_FOLLOWED_BY_SPACE" # Default: up to words followed by space
 
 #------------------------------------------------------------------------------
 # Chord generation parameters
@@ -110,13 +110,13 @@ chord_assignment:
 
   # Context influence weights
   context_weight: 0.2 # Weight for context influence on scoring (0.0-1.0)
-  
+
   # Genetic algorithm parameters
-  population_size: 50    # Genetic algorithm population size
-  generations: 100       # Number of generations for genetic algorithm
-  elite_count: 5         # Number of elite individuals to preserve unchanged
-  mutation_rate: 0.1     # Probability of mutation for each token
-  crossover_rate: 0.7    # Probability of crossover for each pair
+  population_size: 50 # Genetic algorithm population size
+  generations: 100 # Number of generations for genetic algorithm
+  elite_count: 5 # Number of elite individuals to preserve unchanged
+  mutation_rate: 0.1 # Probability of mutation for each token
+  crossover_rate: 0.7 # Probability of crossover for each pair
 
 #------------------------------------------------------------------------------
 # Corpus generation parameters
