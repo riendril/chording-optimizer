@@ -11,7 +11,7 @@ import logging
 from src.common.config import GeneratorConfig
 from src.token_generation.corpus_generator import generate_corpus
 from src.token_generation.token_context import add_context_to_file
-from src.token_generation.token_extraction import extract_tokens
+from src.token_generation.token_selection import extract_and_select_tokens_iteratively
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ def run_pipeline_stage(config: GeneratorConfig, stage: str):
         generate_corpus(config)
     elif stage == "token_extraction":
         logger.info("Extracting, scoring and ordering tokens...")
-        extract_tokens(config)
+        extract_and_select_tokens_iteratively(config)
     elif stage == "token_context":
         logger.info("Adding context to tokens...")
         add_context_to_file(config)
