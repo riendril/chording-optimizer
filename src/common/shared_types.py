@@ -83,7 +83,8 @@ class TokenData:
     text_count: int
     usage_count: int
     rank: int
-    score: float
+    usage_cost: float
+    replacement_score: float
     selected: bool
     best_current_combination: List[str] = field(default_factory=list)
 
@@ -96,7 +97,8 @@ class TokenData:
             "text_count": self.text_count,
             "usage_count": self.usage_count,
             "rank": self.rank,
-            "score": self.score,
+            "usage_count": self.usage_count,
+            "replacement_score": self.replacement_score,
             "selected": self.selected,
             "best_current_combination": self.best_current_combination,
         }
@@ -111,7 +113,8 @@ class TokenData:
             text_count=data["text_count"],
             usage_count=data["usage_count"],
             rank=data["rank"],
-            score=data["score"],
+            usage_cost=data["usage_cost"],
+            replacement_score=data["replacement_score"],
             selected=data["selected"],
             best_current_combination=data["best_current_combination"],
         )

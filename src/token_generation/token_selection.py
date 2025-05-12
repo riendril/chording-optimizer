@@ -5,8 +5,8 @@ This module processes corpus text to:
 1. Initialize a list of selected tokens (starting with single characters)
 2. Iteratively find optimal segmentation of text using currently selected tokens
 3. Generate new token candidates from the optimally segmented text
-4. Score all current tokens based on discomfort (per-use cost)
-5. Select next eligible token based on candidate_score (discomfort * frequency)
+4. Score all current tokens (usage cost and replacement score)
+5. Select next eligible token based on replacement score
 6. Output a ranked list of tokens
 """
 
@@ -31,8 +31,9 @@ from src.token_generation.token_extraction import (
     set_word_set_for_cache,
 )
 from src.token_generation.token_scoring import (
-    calculate_candidate_score,
-    calculate_discomfort_score,
+    calculate_replacement_score,
+    calculate_usage_cost,
+    update_token_scores,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,8 +49,8 @@ def select_tokens_iteratively(
     word_set_id: int,
     benchmark: Benchmark,
     debug_options: dict,
-    layout_comfort: Optional[Dict[str, float]] = None,
-    use_parallel: bool = False,
+    layout_comfort: Dict[str, float],
+    use_parallel: bool,
 ) -> TokenCollection:
     """Select tokens iteratively by finding optimal segmentation after each selection.
 
@@ -72,9 +73,6 @@ def select_tokens_iteratively(
     # Initialize with single letter tokens
     selected_tokens = []
 
-    # Store all candidate tokens ever seen
-    all_candidate_tokens = {}
-
     # Text length for normalization
     text_length = len(text)
 
@@ -90,20 +88,19 @@ def select_tokens_iteratively(
             text_count=text.lower().count(char),
             usage_count=text.lower().count(char),
             rank=0,
-            score=0.0,  # Will store discomfort score
+            usage_cost=0.0,
+            replacement_score=0.0,
             selected=True,
             best_current_combination=[char],
         )
-        # Calculate discomfort score (stored in score field)
-        token_data.score = calculate_discomfort_score(token_data, layout_comfort)
 
         selected_tokens.append(token_data)
-        all_candidate_tokens[char] = token_data
 
-    # Sort by candidate score and assign ranks
-    selected_tokens.sort(
-        key=lambda t: calculate_candidate_score(t, text_length), reverse=True
-    )
+    # Calculate scores for all single character tokens
+    update_token_scores(selected_tokens, text_length, selected_tokens, layout_comfort)
+
+    # Sort by replacement score and assign ranks
+    selected_tokens.sort(key=lambda t: t.replacement_score, reverse=True)
 
     for i, token in enumerate(selected_tokens):
         token.rank = i + 1
@@ -119,85 +116,67 @@ def select_tokens_iteratively(
 
     # Keep track of iteration for debugging
     iteration = 0
+    current_token_candidates = []
+    current_segmentation = []
 
-    while len(selected_tokens) - contained_character_count < chords_to_assign:
+    while True:
         iteration += 1
 
-        # Find optimal segmentation using current selected tokens
-        segmentation = find_optimal_text_segmentation_in_chunks(text, selected_tokens)
+        # Find optimal segmentation using currently selected tokens
+        current_segmentation = find_optimal_text_segmentation_in_chunks(
+            text, selected_tokens
+        )
 
         # Debug: Visualize segmentation if enabled
         if debug_options.get("print_segmentation", False):
             visualization = visualize_text_segmentation(
-                text, segmentation, segments_to_show=1
+                text, current_segmentation, segments_to_show=1
             )
             logger.info(
                 f"Segmentation visualization (iteration {iteration}):\n{visualization}"
             )
 
-        # Extract new token candidates
+        # Extract current token candidates
         if use_parallel:
-            candidate_tokens = extract_tokens_from_segmentation_parallel(
-                segmentation, text, min_token_length, max_token_length, word_set_id
+            current_token_candidates = extract_tokens_from_segmentation_parallel(
+                current_segmentation, min_token_length, max_token_length, word_set_id
             )
         else:
-            candidate_tokens = extract_tokens_from_segmentation(
-                segmentation, text, min_token_length, max_token_length, word_set_id
+            current_token_candidates = extract_tokens_from_segmentation(
+                current_segmentation, min_token_length, max_token_length, word_set_id
             )
 
-        if not candidate_tokens:
-            logger.warning("No more token candidates available")
-            break
-
-        # Calculate discomfort and candidate scores for all candidates
-        for candidate in candidate_tokens:
-            # Calculate discomfort score (stored in score field)
-            candidate.score = calculate_discomfort_score(candidate, layout_comfort)
-
-            # Add to all_candidate_tokens dict
-            if candidate.lower not in all_candidate_tokens:
-                all_candidate_tokens[candidate.lower] = candidate
-            else:
-                # Update existing candidate if better
-                existing = all_candidate_tokens[candidate.lower]
-                existing.text_count = candidate.text_count
-                existing.usage_count = candidate.usage_count
-
-                # Keep the better combination (shorter is better)
-                if len(candidate.best_current_combination) < len(
-                    existing.best_current_combination
-                ):
-                    existing.best_current_combination = (
-                        candidate.best_current_combination
-                    )
-
-                # Keep discomfort score calculation consistent
-                existing.score = calculate_discomfort_score(existing, layout_comfort)
-
-        # Sort candidates by candidate score (not discomfort score)
-        candidate_tokens.sort(
-            key=lambda t: calculate_candidate_score(t, text_length), reverse=True
+        # Calculate scores for all candidates
+        update_token_scores(
+            current_token_candidates, text_length, selected_tokens, layout_comfort
         )
+
+        # Sort candidates by replacement score
+        # TODO: calculate scores, sort and assign ranks in one function!!
+        current_token_candidates.sort(key=lambda t: t.replacement_score, reverse=True)
 
         # Debug: show top candidates if enabled
         if debug_options.get("print_candidates", False):
             top_candidates = (
-                candidate_tokens[:10]
-                if len(candidate_tokens) > 10
-                else candidate_tokens
+                current_token_candidates[:10]
+                if len(current_token_candidates) > 10
+                else current_token_candidates
             )
             candidate_info = "\n".join(
-                f"  {i+1}. '{c.lower}' (discomfort: {c.score:.4f}, "
-                f"candidate_score: {calculate_candidate_score(c, text_length):.6f}, "
+                f"  {i+1}. '{c.lower}' (usage_cost: {c.usage_cost:.4f}, "
+                f"replacement_score: {c.replacement_score:.6f}, "
                 f"count: {c.text_count}, type: {c.token_type.name})"
                 for i, c in enumerate(top_candidates)
             )
             logger.info(f"Top candidates (iteration {iteration}):\n{candidate_info}")
 
+        if len(selected_tokens) - contained_character_count >= chords_to_assign:
+            break
+
         next_token = None
 
-        # Filter eligible candidates based on type, character length, and uniqueness
-        for candidate in candidate_tokens:
+        # Find the highest scoring eligible candidate
+        for candidate in current_token_candidates:
             if (
                 candidate.token_type <= learning_limit
                 and len(candidate.lower) <= max_token_length
@@ -217,12 +196,13 @@ def select_tokens_iteratively(
         next_token.best_current_combination = [
             next_token.lower
         ]  # Set its own representation
+        # TODO: LATER assign chord instead
         selected_tokens.append(next_token)
 
-        # Log with both discomfort and candidate score
+        # Log with both usage cost and replacement score
         logger.info(
-            f"Selected token: '{next_token.lower}' (discomfort: {next_token.score:.4f}, "
-            f"candidate_score: {calculate_candidate_score(next_token, text_length):.6f}, "
+            f"Selected token: '{next_token.lower}' (usage_cost: {next_token.usage_cost:.4f}, "
+            f"replacement_score: {next_token.replacement_score:.6f}, "
             f"count: {next_token.text_count}, type: {next_token.token_type.name})"
         )
 
@@ -232,23 +212,12 @@ def select_tokens_iteratively(
 
     progress_bar.close()
 
-    # Perform one final segmentation after all tokens have been selected
-    logger.info("Performing final segmentation with all selected tokens")
-    final_segmentation = find_optimal_text_segmentation_in_chunks(text, selected_tokens)
-
-    # Recalculate token frequencies based on final segmentation
-    token_usage = Counter()
-    for token_text, _, _, _ in final_segmentation:
-        token_usage[token_text.lower()] += 1
-
-    # Update token counts and recalculate scores
-    for token in selected_tokens:
-        if token.lower in token_usage:
-            token.text_count = token_usage[token.lower]
-            token.usage_count = token_usage[token.lower]
+    final_segmentation = current_segmentation
+    # TODO: should be only top_n of current_token_candidates
+    final_tokens = current_token_candidates
 
     # Visualize final segmentation if enabled
-    if debug_options.get("print_segmentation", False):
+    if debug_options.get("print_segmentation"):
         visualization = visualize_text_segmentation(
             text, final_segmentation, segments_to_show=3
         )
@@ -257,42 +226,6 @@ def select_tokens_iteratively(
         # Always show at least one visualization sample of the final segmentation
         visualization = visualize_text_segmentation(text, final_segmentation)
         logger.info(f"Sample of final segmentation:\n{visualization}")
-
-    # Prepare final token collection including both selected tokens and top candidates
-    final_tokens = []
-
-    # First include all selected tokens
-    final_tokens.extend(selected_tokens)
-
-    # Convert all_candidate_tokens dict to list
-    all_candidates_list = list(all_candidate_tokens.values())
-
-    # Sort all candidates by candidate score
-    all_candidates_list.sort(
-        key=lambda t: calculate_candidate_score(t, text_length), reverse=True
-    )
-
-    # Add non-selected top tokens to reach top_n_tokens
-    non_selected_top_tokens = [
-        t
-        for t in all_candidates_list
-        if not t.selected and t.token_type <= learning_limit
-    ][: top_n_tokens - len(selected_tokens)]
-
-    final_tokens.extend(non_selected_top_tokens)
-
-    # Sort all tokens by selected status and candidate score
-    final_tokens.sort(
-        key=lambda t: (
-            -1 if t.selected else 0,
-            calculate_candidate_score(t, text_length),
-        ),
-        reverse=True,
-    )
-
-    # Update ranks
-    for i, token in enumerate(final_tokens):
-        token.rank = i + 1
 
     # Create token collection with final tokens
     token_collection = TokenCollection(
@@ -340,6 +273,7 @@ def extract_and_select_tokens_iteratively(config: GeneratorConfig) -> None:
         and config.debug.save_intermediate_results,
     }
 
+    # TODO: should not be optional! Just use the configured values or crash
     # Load keyboard layout comfort information if available
     layout_comfort = None
     try:
@@ -356,7 +290,7 @@ def extract_and_select_tokens_iteratively(config: GeneratorConfig) -> None:
             )
     except Exception as e:
         logger.warning(f"Could not load layout comfort information: {e}")
-        logger.warning("Using default discomfort scores based on token length")
+        logger.warning("Using default usage cost scores based on token length")
 
     # Start iterative token selection
     logger.info("Starting iterative token selection")
@@ -387,8 +321,10 @@ def extract_and_select_tokens_iteratively(config: GeneratorConfig) -> None:
     output_path = config.paths.tokens_dir / output_filename
 
     # Save intermediate results if enabled
-    if debug_options.get("save_intermediate", False):
-        # Save a debug version with discomfort scores visible in filename
+    # TODO: these results are not intermediate, saving should be done during the
+    # iterative selection
+    if debug_options.get("save_intermediate"):
+        # Save a debug version with usage cost scores visible in filename
         debug_output_filename = (
             f"{corpus_name}_tokens_{config.token_analysis.top_n_tokens}_debug.json"
         )
@@ -425,9 +361,8 @@ def extract_and_select_tokens_iteratively(config: GeneratorConfig) -> None:
         selected_tokens[:10] if len(selected_tokens) >= 10 else selected_tokens
     )
     token_info = "\n".join(
-        f"  {i+1}. '{t.lower}' (discomfort: {t.score:.4f}, count: {t.text_count}, type: {t.token_type.name})"
+        f"  {i+1}. '{t.lower}' (usage_cost: {t.usage_cost:.4f}, count: {t.text_count}, type: {t.token_type.name})"
         for i, t in enumerate(top_selected)
     )
     logger.info(f"Top selected tokens:\n{token_info}")
-
     logger.info("Token extraction completed successfully")

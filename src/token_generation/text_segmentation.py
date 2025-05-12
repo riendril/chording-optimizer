@@ -7,6 +7,7 @@ currently selected tokens via dynamic programming.
 
 import logging
 import random
+from dataclasses import dataclass
 from typing import List, Tuple
 
 from src.common.shared_types import TokenData
@@ -14,9 +15,19 @@ from src.common.shared_types import TokenData
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class TextSegment:
+    """Represents a segment of text in the optimal segmentation"""
+
+    token_text: str  # The token text (lowercase)
+    start_pos: int  # Start position in the original text
+    end_pos: int  # End position in the original text
+    token_data: TokenData  # Associated token data
+
+
 def find_optimal_text_segmentation(
     text: str, selected_tokens: List[TokenData]
-) -> List[Tuple[str, int, int, TokenData]]:
+) -> List[TextSegment]:
     """Find optimal segmentation of text using currently selected tokens with
     dynamic programming.
 
@@ -25,8 +36,7 @@ def find_optimal_text_segmentation(
         selected_tokens: List of currently selected tokens
 
     Returns:
-        List of tuples (token_text, start_pos, end_pos, token_data)
-        representing the optimal segmentation
+        List of TextSegment objects representing the optimal segmentation
     """
     # Create a dict of selected token strings to TokenData for fast lookup
     token_dict = {token.lower: token for token in selected_tokens}
@@ -83,7 +93,14 @@ def find_optimal_text_segmentation(
             # Find the single character token
             token_data = next((t for t in selected_tokens if t.lower == char), None)
 
-        result.append((token_text, start, pos, token_data))
+        result.append(
+            TextSegment(
+                token_text=token_text,
+                start_pos=start,
+                end_pos=pos,
+                token_data=token_data,
+            )
+        )
         pos = start
 
     # Reverse to get tokens in order
@@ -92,7 +109,7 @@ def find_optimal_text_segmentation(
 
 def find_optimal_text_segmentation_in_chunks(
     text: str, selected_tokens: List[TokenData], chunk_size: int = 10000
-) -> List[Tuple[str, int, int, TokenData]]:
+) -> List[TextSegment]:
     """Find optimal segmentation of text in chunks for better memory efficiency with large corpuses.
 
     Args:
@@ -101,7 +118,7 @@ def find_optimal_text_segmentation_in_chunks(
         chunk_size: Size of chunks to process
 
     Returns:
-        List of tuples (token_text, start_pos, end_pos, token_data)
+        List of TextSegment objects
     """
     result = []
     n = len(text)
@@ -111,22 +128,27 @@ def find_optimal_text_segmentation_in_chunks(
         chunk = text[start:end]
 
         # Find optimal segmentation for this chunk
-        chunk_tokens = find_optimal_text_segmentation(chunk, selected_tokens)
+        chunk_segments = find_optimal_text_segmentation(chunk, selected_tokens)
 
         # Adjust positions to global coordinates
-        adjusted_tokens = [
-            (token_text, start + token_start, start + token_end, token_data)
-            for token_text, token_start, token_end, token_data in chunk_tokens
+        adjusted_segments = [
+            TextSegment(
+                token_text=segment.token_text,
+                start_pos=start + segment.start_pos,
+                end_pos=start + segment.end_pos,
+                token_data=segment.token_data,
+            )
+            for segment in chunk_segments
         ]
 
-        result.extend(adjusted_tokens)
+        result.extend(adjusted_segments)
 
     return result
 
 
 def visualize_text_segmentation(
     text: str,
-    segmentation: List[Tuple[str, int, int, TokenData]],
+    segmentation: List[TextSegment],
     segment_length: int = 100,
     segments_to_show: int = 1,
 ) -> str:
@@ -134,7 +156,7 @@ def visualize_text_segmentation(
 
     Args:
         text: Original text
-        segmentation: List of tuples (token_text, start_pos, end_pos, token_data)
+        segmentation: List of TextSegment objects
         segment_length: Length of text segment to visualize
         segments_to_show: Number of random segments to visualize
 
@@ -158,9 +180,9 @@ def visualize_text_segmentation(
 
         # Find tokens that overlap with the selected segment
         segment_tokens = []
-        for token_text, start_pos, end_pos, token_data in segmentation:
-            if start_pos < random_end and end_pos > random_start:
-                segment_tokens.append((token_text, start_pos, end_pos, token_data))
+        for segment in segmentation:
+            if segment.start_pos < random_end and segment.end_pos > random_start:
+                segment_tokens.append(segment)
 
         # Create text line with segment
         segment_text = text[random_start:random_end]
@@ -173,9 +195,9 @@ def visualize_text_segmentation(
         markers[0] = "|"
 
         # Add | at token boundaries
-        for _, start_pos, end_pos, _ in segment_tokens:
-            rel_start = start_pos - random_start
-            rel_end = end_pos - random_start
+        for segment in segment_tokens:
+            rel_start = segment.start_pos - random_start
+            rel_end = segment.end_pos - random_start
 
             if 0 <= rel_start < segment_length:
                 markers[rel_start] = "|"
@@ -194,18 +216,20 @@ def visualize_text_segmentation(
 
         # Add token details
         visualization += "Tokens in this segment:\n"
-        for token_text, start_pos, end_pos, token_data in segment_tokens:
-            rel_start = max(0, start_pos - random_start)
-            rel_end = min(segment_length, end_pos - random_start)
+        for segment in segment_tokens:
+            rel_start = max(0, segment.start_pos - random_start)
+            rel_end = min(segment_length, segment.end_pos - random_start)
 
             # Calculate candidate score for display
-            discomfort = token_data.score
+            discomfort = segment.token_data.score
             # FIX: Use candidate_score attribute instead of calculating here
             candidate_score = (
-                token_data.text_count / len(text) / discomfort if discomfort > 0 else 0
+                segment.token_data.text_count / len(text) / discomfort
+                if discomfort > 0
+                else 0
             )
 
-            visualization += f"[{rel_start}:{rel_end}] '{token_text}' (discomfort: {discomfort:.4f}, candidate_score: {candidate_score:.6f})\n"
+            visualization += f"[{rel_start}:{rel_end}] '{segment.token_text}' (discomfort: {discomfort:.4f}, candidate_score: {candidate_score:.6f})\n"
 
         visualizations.append(visualization)
 

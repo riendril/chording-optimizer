@@ -10,6 +10,7 @@ from functools import lru_cache
 from typing import Dict, List, Optional, Set, Tuple
 
 from src.common.shared_types import TokenData, TokenType
+from src.token_generation.text_segmentation import TextSegment
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +96,7 @@ def set_word_set_for_cache(word_set: set[str]) -> int:
 
 
 def extract_tokens_from_segmentation(
-    segmentation: List[Tuple[str, int, int, TokenData]],
-    text: str,
+    segmentation: List[TextSegment],
     min_token_length: int,
     max_token_length: int,
     word_set_id: int,
@@ -104,9 +104,7 @@ def extract_tokens_from_segmentation(
     """Extract all token candidates from current optimal text segmentation.
 
     Args:
-        segmentation: List of (token_text, start_pos, end_pos, token_data)
-                     from optimal segmentation
-        text: Original text
+        segmentation: List of TextSegment objects from optimal segmentation
         min_token_length: Minimum subtoken count in a token
         max_token_length: Maximum subtoken count in a token
         word_set_id: Identifier for word set used in classification
@@ -114,9 +112,6 @@ def extract_tokens_from_segmentation(
     Returns:
         List of extracted TokenData objects
     """
-    # TODO: Why does this function even need the text? The segmentation should
-    # be enough, right?
-
     # Counter for token frequencies
     from collections import Counter
 
@@ -132,17 +127,13 @@ def extract_tokens_from_segmentation(
             window = segmentation[i : i + window_size]
 
             # Get text span
-            start_pos = window[0][1]
-            end_pos = window[-1][2]
-            token_text = text[start_pos:end_pos].lower()
+            token_text = "".join(segment.token_text for segment in window).lower()
 
             # Count this token
             token_counter[token_text] += 1
 
             # Store the composition (which selected tokens make up this new token)
-            composition = [w[0] for w in window]
-            # FIX: Use the TokenData field instead of randomly implementing a
-            # separate data type (best_current_combination)
+            composition = [segment.token_text for segment in window]
 
             if token_text not in token_compositions:
                 token_compositions[token_text] = composition
@@ -177,8 +168,7 @@ def extract_tokens_from_segmentation(
 
 
 def extract_tokens_from_segmentation_parallel(
-    segmentation: List[Tuple[str, int, int, TokenData]],
-    text: str,
+    segmentation: List[TextSegment],
     min_token_length: int,
     max_token_length: int,
     word_set_id: int,
@@ -186,8 +176,7 @@ def extract_tokens_from_segmentation_parallel(
     """Extract new token candidates from optimal text segmentation using parallel processing.
 
     Args:
-        segmentation: List of (token_text, start_pos, end_pos, token_data)
-        text: Original text
+        segmentation: List of TextSegment objects
         min_token_length: Minimum token count
         max_token_length: Maximum token count
         word_set_id: Identifier for word set
@@ -195,8 +184,6 @@ def extract_tokens_from_segmentation_parallel(
     Returns:
         List of extracted TokenData objects
     """
-    # TODO: Why does this function even need the text? The segmentation should
-    # be enough, right?
     # TODO: Why is this even such a complicated function in the first place? All
     # one needs to do after the segmentation is simply count all unique
     # combinations of segments between min_length and max_length
@@ -206,7 +193,7 @@ def extract_tokens_from_segmentation_parallel(
     # For small segmentations, use sequential approach
     if len(segmentation) < 1000:
         return extract_tokens_from_segmentation(
-            segmentation, text, min_token_length, max_token_length, word_set_id
+            segmentation, min_token_length, max_token_length, word_set_id
         )
 
     # Create a manager for sharing data between processes
@@ -225,7 +212,7 @@ def extract_tokens_from_segmentation_parallel(
     for i in range(0, n, chunk_size):
         end = min(i + chunk_size + max_token_length - 1, n)
         chunks.append(
-            (segmentation[i:end], text, min_token_length, max_token_length, word_set_id)
+            (segmentation[i:end], min_token_length, max_token_length, word_set_id)
         )
 
     # Process chunks in parallel
