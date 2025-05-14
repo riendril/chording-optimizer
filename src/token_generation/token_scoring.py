@@ -24,7 +24,7 @@ _usage_cost_cache = {}
 def calculate_usage_cost(
     token: TokenData,
     selected_tokens: List[TokenData],
-    layout_comfort: Dict[str, float],
+    layout_usage_cost: Dict[str, float],
 ) -> float:
     """Calculate the usage cost for a token (cost per use).
 
@@ -34,20 +34,20 @@ def calculate_usage_cost(
     Args:
         token: The token to score
         selected_tokens: List of currently selected tokens (for subtoken costs)
-        layout_comfort: Dict mapping characters to comfort scores
+        layout_usage_cost: Dict mapping characters to usage costs (required)
 
     Returns:
         Usage cost (lower is better)
 
     Examples:
-        >>> # Single character with layout comfort
+        >>> # Single character with layout usage cost
         >>> token = TokenData(lower='a', length=1, token_type=TokenType.SINGLE_CHARACTER,
         ...                   text_count=100, usage_count=100, rank=1,
         ...                   usage_cost=0.0, replacement_score=0.0, selected=True,
         ...                   best_current_combination=['a'])
-        >>> layout_comfort = {'a': 1.0, 'b': 2.0}
-        >>> calculate_usage_cost(token, None, layout_comfort)
-        0.1
+        >>> layout_usage_cost = {'a': 1.0, 'b': 2.0}
+        >>> calculate_usage_cost(token, None, layout_usage_cost)
+        1.0
 
         >>> # Multi-character token with subtokens
         >>> token2 = TokenData(lower='abc', length=3, token_type=TokenType.NGRAM_LETTERS_ONLY,
@@ -56,10 +56,10 @@ def calculate_usage_cost(
         ...                    best_current_combination=['a', 'b', 'c'])
         >>> a_token = TokenData(lower='a', length=1, token_type=TokenType.SINGLE_CHARACTER,
         ...                     text_count=100, usage_count=100, rank=1,
-        ...                     usage_cost=0.1, replacement_score=0.0, selected=True,
+        ...                     usage_cost=1.0, replacement_score=0.0, selected=True,
         ...                     best_current_combination=['a'])
         >>> selected_tokens = [a_token]
-        >>> calculate_usage_cost(token2, selected_tokens, layout_comfort)
+        >>> calculate_usage_cost(token2, selected_tokens, layout_usage_cost)
         3.0
     """
 
@@ -72,17 +72,14 @@ def calculate_usage_cost(
     if cache_key in _usage_cost_cache:
         return _usage_cost_cache[cache_key]
 
-    # For single characters, use layout comfort
+    # For single characters, use layout usage cost
     if len(token.lower) == 1:
-        if layout_comfort and token.lower in layout_comfort:
-            cost = layout_comfort[token.lower]
+        if token.lower in layout_usage_cost:
+            cost = layout_usage_cost[token.lower]
         else:
-            # Handle unknown characters with a default value
-            unknown_cost = 5.0  # Higher cost for unknown characters
-            if layout_comfort and "unknown" in layout_comfort:
-                unknown_cost = layout_comfort["unknown"]
+            # Use the default cost for unknown characters
+            cost = layout_usage_cost.get("unknown", 15)
             logger.debug(f"Using default cost for unknown character: '{token.lower}'")
-            cost = unknown_cost
     else:
         # For multi-character tokens, sum the costs of subtokens
         cost = 0
@@ -106,7 +103,7 @@ def calculate_replacement_score(
     token: TokenData,
     text_length: int,
     selected_tokens: List[TokenData],
-    layout_comfort: Dict[str, float],
+    layout_usage_cost: Dict[str, float],
 ) -> float:
     """Calculate the replacement score for a token based on frequency
     and usage cost.
@@ -118,7 +115,7 @@ def calculate_replacement_score(
         token: The token to score
         text_length: Length of the entire text for normalization
         selected_tokens: List of currently selected tokens (for usage cost calculation)
-        layout_comfort: Dict mapping characters to comfort scores (for usage cost calculation)
+        layout_usage_cost: Dict mapping characters to usage costs (required)
 
     Returns:
         Replacement score (higher is better)
@@ -128,12 +125,14 @@ def calculate_replacement_score(
         ...                   text_count=1000, usage_count=1000, rank=1,
         ...                   usage_cost=3.0, replacement_score=0.0, selected=False,
         ...                   best_current_combination=['t', 'h', 'e'])
-        >>> calculate_replacement_score(token, 100000)
-        3.3333333333333335
+        >>> calculate_replacement_score(token, 100000, [], {})
+        0.00003
     """
     # Ensure usage cost is calculated if not already set
     if token.usage_cost <= 0:
-        token.usage_cost = calculate_usage_cost(token, selected_tokens, layout_comfort)
+        token.usage_cost = calculate_usage_cost(
+            token, selected_tokens, layout_usage_cost
+        )
 
     # Frequency benefit - normalized by text length
     frequency_factor = token.text_count / text_length
@@ -146,21 +145,23 @@ def update_token_scores(
     tokens: List[TokenData],
     text_length: int,
     selected_tokens: List[TokenData],
-    layout_comfort: Dict[str, float],
+    layout_usage_cost: Dict[str, float],
 ) -> None:
     """Update both usage costs and replacement scores for a list of tokens in place.
     Args:
         tokens: List of tokens to update scores for
         text_length: Length of the entire text for normalization
         selected_tokens: List of currently selected tokens (for usage cost calculation)
-        layout_comfort: Dict mapping characters to comfort scores
+        layout_usage_cost: Dict mapping characters to usage costs (required)
     """
     for token in tokens:
         # Calculate usage cost (static score)
-        token.usage_cost = calculate_usage_cost(token, selected_tokens, layout_comfort)
+        token.usage_cost = calculate_usage_cost(
+            token, selected_tokens, layout_usage_cost
+        )
         # Calculate replacement score (dynamic value)
         token.replacement_score = calculate_replacement_score(
-            token, text_length, selected_tokens, layout_comfort
+            token, text_length, selected_tokens, layout_usage_cost
         )
 
 

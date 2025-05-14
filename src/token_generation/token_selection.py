@@ -1,44 +1,3 @@
-"""
-Token selection module with iterative selection algorithm.
-
-This module processes corpus text to:
-1. Initialize a list of selected tokens (starting with single characters)
-2. Iteratively find optimal segmentation of text using currently selected tokens
-3. Generate new token candidates from the optimally segmented text
-4. Score all current tokens (usage cost and replacement score)
-5. Select next eligible token based on replacement score
-6. Output a ranked list of tokens
-"""
-
-import logging
-import os
-from collections import Counter
-from typing import Dict, Optional
-
-import tqdm
-
-from src.common.benchmarking import Benchmark, BenchmarkPhase
-from src.common.config import GeneratorConfig
-from src.common.shared_types import TokenCollection, TokenData, TokenType
-from src.token_generation.text_segmentation import (
-    find_optimal_text_segmentation_in_chunks,
-    visualize_text_segmentation,
-)
-from src.token_generation.token_extraction import (
-    extract_tokens_from_segmentation,
-    extract_tokens_from_segmentation_parallel,
-    extract_words_from_text,
-    set_word_set_for_cache,
-)
-from src.token_generation.token_scoring import (
-    calculate_replacement_score,
-    calculate_usage_cost,
-    update_token_scores,
-)
-
-logger = logging.getLogger(__name__)
-
-
 def select_tokens_iteratively(
     text: str,
     min_token_length: int,
@@ -49,7 +8,7 @@ def select_tokens_iteratively(
     word_set_id: int,
     benchmark: Benchmark,
     debug_options: dict,
-    layout_comfort: Dict[str, float],
+    layout_usage_cost: Dict[str, float],
     use_parallel: bool,
 ) -> TokenCollection:
     """Select tokens iteratively by finding optimal segmentation after each selection.
@@ -64,7 +23,7 @@ def select_tokens_iteratively(
         word_set_id: Identifier for word set
         benchmark: Benchmark instance
         debug_options: Debugging options
-        layout_comfort: Optional dict mapping characters to comfort scores
+        layout_usage_cost: Dict mapping characters to usage costs
         use_parallel: Whether to use parallel processing
 
     Returns:
@@ -97,7 +56,9 @@ def select_tokens_iteratively(
         selected_tokens.append(token_data)
 
     # Calculate scores for all single character tokens
-    update_token_scores(selected_tokens, text_length, selected_tokens, layout_comfort)
+    update_token_scores(
+        selected_tokens, text_length, selected_tokens, layout_usage_cost
+    )
 
     # Sort by replacement score and assign ranks
     selected_tokens.sort(key=lambda t: t.replacement_score, reverse=True)
@@ -148,7 +109,7 @@ def select_tokens_iteratively(
 
         # Calculate scores for all candidates
         update_token_scores(
-            current_token_candidates, text_length, selected_tokens, layout_comfort
+            current_token_candidates, text_length, selected_tokens, layout_usage_cost
         )
 
         # Sort candidates by replacement score
@@ -273,24 +234,32 @@ def extract_and_select_tokens_iteratively(config: GeneratorConfig) -> None:
         and config.debug.save_intermediate_results,
     }
 
-    # TODO: should not be optional! Just use the configured values or crash
-    # Load keyboard layout comfort information if available
-    layout_comfort = None
-    try:
-        # Get active layout file
-        from src.common.layout import load_keyboard_layout
+    # Load keyboard layout usage cost information (required)
+    from src.common.layout import load_keyboard_layout
 
-        layout_path = config.paths.get_layout_path(config.active_layout_file)
-        layout_data = load_keyboard_layout(layout_path)
+    layout_path = config.paths.get_layout_path(config.active_layout_file)
+    layout_data = load_keyboard_layout(layout_path)
 
-        if "comfort" in layout_data:
-            layout_comfort = layout_data["comfort"]
-            logger.info(
-                f"Loaded comfort information from keyboard layout '{config.active_layout_file}'"
-            )
-    except Exception as e:
-        logger.warning(f"Could not load layout comfort information: {e}")
-        logger.warning("Using default usage cost scores based on token length")
+    if "usage_cost" not in layout_data:
+        raise ValueError(
+            f"Layout file '{config.active_layout_file}' missing required usage_cost matrix"
+        )
+
+    layout_usage_cost = layout_data["usage_cost"]
+    logger.info(
+        f"Loaded usage cost information from keyboard layout '{config.active_layout_file}'"
+    )
+
+    # Validate that all usage cost values are positive
+    zero_values = [key for key, value in layout_usage_cost.items() if value <= 0]
+    if zero_values:
+        raise ValueError(
+            f"Layout usage cost matrix contains non-positive values for keys: {zero_values}"
+        )
+
+    # Ensure 'unknown' key exists in layout usage cost
+    if "unknown" not in layout_usage_cost:
+        raise ValueError("Layout usage cost matrix missing required 'unknown' entry")
 
     # Start iterative token selection
     logger.info("Starting iterative token selection")
@@ -309,7 +278,7 @@ def extract_and_select_tokens_iteratively(config: GeneratorConfig) -> None:
         word_set_id,
         benchmark,
         debug_options,
-        layout_comfort=layout_comfort,
+        layout_usage_cost=layout_usage_cost,
         use_parallel=use_parallel,
     )
 

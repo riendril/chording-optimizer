@@ -63,31 +63,32 @@ fingers:
   l: R_RING
   p: R_PINKY
 
-# Comfort matrix (lower is better)
-comfort:
-  q: 5
-  a: 2
-  z: 5
-  w: 4
-  s: 1
-  x: 4
-  e: 4
-  d: 0
-  c: 4
-  r: 4
-  f: 0
-  v: 4
-  t: 6
-  g: 4
-  b: 6
-  y: 6
-  h: 4
-  n: 4
-  u: 4
-  j: 0
-  m: 4
-  i: 4
-  k: 0
-  o: 4
-  l: 1
-  p: 5
+# Usage cost matrix (lower is better)
+usage_cost:
+  q: 1.690
+  a: 1.100
+  z: 1.690
+  w: 1.320
+  s: 1.000
+  x: 1.320
+  e: 1.320
+  d: 1.000
+  c: 1.320
+  r: 1.320
+  f: 1.000
+  v: 1.320
+  t: 1.829
+  g: 1.320
+  b: 1.829
+  y: 1.829
+  h: 1.320
+  n: 1.320
+  u: 1.320
+  j: 1.000
+  m: 1.320
+  i: 1.320
+  k: 1.000
+  o: 1.320
+  l: 1.100
+  p: 1.690
+  unknown: 3.000
