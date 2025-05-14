@@ -46,7 +46,6 @@ def select_tokens_iteratively(
     learning_limit: TokenType,
     chords_to_assign: int,
     top_n_tokens: int,
-    word_set_id: int,
     benchmark: Benchmark,
     debug_options: dict,
     layout_usage_cost: Dict[str, float],
@@ -61,7 +60,6 @@ def select_tokens_iteratively(
         learning_limit: Maximum token type complexity
         chords_to_assign: Number of tokens to select
         top_n_tokens: Number of top tokens to include in output
-        word_set_id: Identifier for word set
         benchmark: Benchmark instance
         debug_options: Debugging options
         layout_usage_cost: Dict mapping characters to usage costs
@@ -83,7 +81,8 @@ def select_tokens_iteratively(
     for char in unique_chars:
         token_data = TokenData(
             lower=char,
-            length=1,
+            character_length=1,
+            subtoken_length=1,
             token_type=TokenType.SINGLE_CHARACTER,
             text_count=text.lower().count(char),
             usage_count=text.lower().count(char),
@@ -141,11 +140,11 @@ def select_tokens_iteratively(
         # Extract current token candidates
         if use_parallel:
             current_token_candidates = extract_tokens_from_segmentation_parallel(
-                current_segmentation, min_token_length, max_token_length, word_set_id
+                current_segmentation, min_token_length, max_token_length
             )
         else:
             current_token_candidates = extract_tokens_from_segmentation(
-                current_segmentation, min_token_length, max_token_length, word_set_id
+                current_segmentation, min_token_length, max_token_length
             )
 
         # Calculate scores for all candidates
@@ -234,7 +233,6 @@ def select_tokens_iteratively(
         name="iterative_selection",
         tokens=final_tokens,
         ordered_by_frequency=True,
-        source="iterative_approach",
     )
 
     return token_collection
@@ -264,8 +262,8 @@ def extract_and_select_tokens_iteratively(config: GeneratorConfig) -> None:
     word_set = extract_words_from_text(corpus_text)
     logger.info(f"Extracted {len(word_set)} unique words from corpus")
 
-    # Set global word set for caching and get identifier
-    word_set_id = set_word_set_for_cache(word_set)
+    # Set global word set for caching
+    set_word_set_for_cache(word_set)
 
     # Set up debug options based on config
     debug_options = {
@@ -316,7 +314,6 @@ def extract_and_select_tokens_iteratively(config: GeneratorConfig) -> None:
         config.token_analysis.learning_limit_type,
         config.general.chords_to_assign,
         config.token_analysis.top_n_tokens,
-        word_set_id,
         benchmark,
         debug_options,
         layout_usage_cost=layout_usage_cost,
