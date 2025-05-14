@@ -145,6 +145,11 @@ def select_tokens_iteratively(
                 current_segmentation, min_token_length, max_token_length
             )
 
+        # Update scores of selected_tokens
+        update_token_scores(
+            selected_tokens, text_length, selected_tokens, layout_usage_cost
+        )
+
         # Calculate scores for all candidates
         update_token_scores(
             current_token_candidates, text_length, selected_tokens, layout_usage_cost
@@ -212,8 +217,31 @@ def select_tokens_iteratively(
     progress_bar.close()
 
     final_segmentation = current_segmentation
-    # TODO: should be only top_n of current_token_candidates
-    final_tokens = current_token_candidates
+
+    # Combine all tokens into one list, avoiding duplicates
+    all_tokens = {}
+
+    # Add selected tokens first
+    for token in selected_tokens:
+        all_tokens[token.lower] = token
+
+    # Add candidates, but only if they're not already in selected_tokens
+    # TODO:Tokens being in both lists should not be possible in the first place!
+    # Check code for this, then put an assertion here!!
+    for token in current_token_candidates:
+        if token.lower not in all_tokens:
+            all_tokens[token.lower] = token
+
+    # Convert back to list and sort by replacement score
+    final_tokens_list = list(all_tokens.values())
+    final_tokens_list.sort(key=lambda t: t.replacement_score, reverse=True)
+
+    # Assign ranks based on sorted order
+    for i, token in enumerate(final_tokens_list):
+        token.rank = i + 1
+
+    # Take only the top_n_tokens
+    final_tokens_list = final_tokens_list[:top_n_tokens]
 
     # Visualize final segmentation if enabled
     if debug_options.get("print_segmentation"):
@@ -227,7 +255,7 @@ def select_tokens_iteratively(
     # Create token collection with final tokens
     token_collection = TokenCollection(
         name="iterative_selection",
-        tokens=final_tokens,
+        tokens=final_tokens_list,
         ordered_by_frequency=True,
     )
 
