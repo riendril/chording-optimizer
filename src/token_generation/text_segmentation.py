@@ -28,120 +28,132 @@ class TextSegment:
 def find_optimal_text_segmentation(
     text: str, selected_tokens: List[TokenData]
 ) -> List[TextSegment]:
-    """Find optimal segmentation of text using currently selected tokens with
-    dynamic programming.
+    """Find optimal segmentation that minimizes total usage cost.
+
+    Uses dynamic programming to find the segmentation with minimum sum of token usage costs.
 
     Args:
-        text: Input text to tokenize
-        selected_tokens: List of currently selected tokens
+        text: Input text to segment (should be lowercase)
+        selected_tokens: List of available tokens with their usage costs
 
     Returns:
-        List of TextSegment objects representing the optimal segmentation
+        List of TextSegment objects representing the minimum cost segmentation
+
+    Examples:
+        >>> # If "here" costs 1.0 but h+e+r+e costs 4.2, "here" will be chosen
+        >>> # If "the" costs 0.5 but t+h+e costs 3.2, "the" will be chosen
+        >>> tokens = [create_token('h', 1.2), create_token('e', 1.0), ...]
+        >>> segmentation = find_optimal_text_segmentation("here", tokens)
+        >>> [seg.token_text for seg in segmentation]
+        ['here']
     """
-    # Create a dict of selected token strings to TokenData for fast lookup
-    token_dict = {token.lower: token for token in selected_tokens}
-    # TODO: Is that actually useful?
-
-    # DP array: best[i] = best segmentation up to position i
-    # Each entry contains (score, last_token_start)
     n = len(text)
-    best = [(0, 0) for _ in range(n + 1)]
 
-    # Bottom-up DP
+    # Create token lookup dictionary for O(1) access
+    token_dict = {token.lower: token for token in selected_tokens}
+
+    # DP array: dp[i] = (min_cost_to_position_i, best_prev_position)
+    # dp[i] represents minimum cost to segment text[0:i]
+    dp = [(float("inf"), -1) for _ in range(n + 1)]
+    dp[0] = (0.0, -1)  # Base case: empty string has cost 0
+
+    # For each position in the text
     for i in range(1, n + 1):
-        # Default: use previous best + single character
-        # For single characters, use their usage cost from the token
-        char = text[i - 1 : i].lower()
-        char_token = token_dict.get(char)
+        # Try all possible tokens ending at position i
+        for j in range(i):
+            candidate_token = text[j:i].lower()
 
-        # Use inverse of usage cost for the DP score (higher = better segmentation)
-        # TODO: What exactly do these numbers mean? Looks weirdly hard coded
-        best[i] = (best[i - 1][0] + 1.0 / char_token.usage_cost, i - 1)
+            # Check if this substring is a valid token
+            if candidate_token in token_dict:
+                token_data = token_dict[candidate_token]
+                cost = token_data.usage_cost
 
-        # Try all possible last tokens ending at position i
-        max_token_len = min(i, max(len(t.lower) for t in selected_tokens))
+                # Calculate total cost if we use this token
+                total_cost = dp[j][0] + cost
 
-        for length in range(1, max_token_len + 1):
-            start = i - length
-            candidate = text[start:i].lower()
+                # Update if this gives a better solution
+                if total_cost < dp[i][0]:
+                    dp[i] = (total_cost, j)
 
-            if candidate in token_dict:
-                # Use usage cost (lower is better for segmentation)
-                token_usage_cost = token_dict[candidate].usage_cost
-
-                # For segmentation, we want lower usage cost = better score
-                # So we use inverse of usage cost (higher = better)
-                token_value = 1.0 / max(0.1, token_usage_cost)
-
-                candidate_score = best[start][0] + token_value
-                if candidate_score > best[i][0]:
-                    best[i] = (candidate_score, start)
-
-    # Reconstruct the tokenization
+    # Reconstruct the optimal segmentation by backtracking
     result = []
     pos = n
 
     while pos > 0:
-        start = best[pos][1]
-        token_text = text[start:pos].lower()
+        start_pos = dp[pos][1]
+        token_text = text[start_pos:pos].lower()
+        token_data = token_dict[token_text]
 
-        if token_text in token_dict:
-            token_data = token_dict[token_text]
-        else:
-            # Single character case
-            char = text[start:pos].lower()
-            # Find the single character token
-            token_data = next((t for t in selected_tokens if t.lower == char), None)
-
-        result.append(
-            TextSegment(
-                token_text=token_text,
-                start_pos=start,
-                end_pos=pos,
-                token_data=token_data,
-            )
+        # Create TextSegment for this token
+        segment = TextSegment(
+            token_text=token_text,
+            start_pos=start_pos,
+            end_pos=pos,
+            token_data=token_data,
         )
-        pos = start
+        result.append(segment)
+        pos = start_pos
 
-    # Reverse to get tokens in order
+    # Reverse to get correct order (we built it backwards)
     return result[::-1]
 
 
 def find_optimal_text_segmentation_in_chunks(
     text: str, selected_tokens: List[TokenData], chunk_size: int = 10000
 ) -> List[TextSegment]:
-    """Find optimal segmentation of text in chunks for better memory efficiency with large corpuses.
+    """Find optimal segmentation in chunks for memory efficiency.
+
+    Processes text in overlapping chunks to handle very large texts while
+    maintaining optimal segmentation across chunk boundaries.
 
     Args:
-        text: Input text to tokenize
-        selected_tokens: List of currently selected tokens
-        chunk_size: Size of chunks to process
+        text: Input text to segment
+        selected_tokens: List of available tokens
+        chunk_size: Size of each chunk to process
 
     Returns:
-        List of TextSegment objects
+        List of TextSegment objects representing optimal segmentation
     """
-    result = []
-    n = len(text)
+    if len(text) <= chunk_size:
+        return find_optimal_text_segmentation(text, selected_tokens)
 
-    for start in range(0, n, chunk_size):
-        end = min(start + chunk_size, n)
-        chunk = text[start:end]
+    # Find maximum token length for overlap calculation
+    max_token_len = max(len(token.lower) for token in selected_tokens)
+    overlap = min(max_token_len * 2, chunk_size // 4)
+
+    result = []
+    pos = 0
+
+    while pos < len(text):
+        # Calculate chunk boundaries
+        chunk_start = pos
+        chunk_end = min(pos + chunk_size, len(text))
+
+        # Add overlap for all chunks except the first
+        if pos > 0:
+            chunk_start = max(0, pos - overlap)
+
+        # Extract chunk
+        chunk = text[chunk_start:chunk_end]
 
         # Find optimal segmentation for this chunk
         chunk_segments = find_optimal_text_segmentation(chunk, selected_tokens)
 
-        # Adjust positions to global coordinates
-        adjusted_segments = [
-            TextSegment(
-                token_text=segment.token_text,
-                start_pos=start + segment.start_pos,
-                end_pos=start + segment.end_pos,
-                token_data=segment.token_data,
-            )
-            for segment in chunk_segments
-        ]
+        # Filter segments that belong to our current position
+        for segment in chunk_segments:
+            global_start = chunk_start + segment.start_pos
+            global_end = chunk_start + segment.end_pos
 
-        result.extend(adjusted_segments)
+            # Only include segments that start at or after our current position
+            if global_start >= pos:
+                adjusted_segment = TextSegment(
+                    token_text=segment.token_text,
+                    start_pos=global_start,
+                    end_pos=global_end,
+                    token_data=segment.token_data,
+                )
+                result.append(adjusted_segment)
+                pos = global_end
 
     return result
 
@@ -155,110 +167,60 @@ def visualize_text_segmentation(
 
     Args:
         segmentation: List of TextSegment objects
-        segment_length: Length of text segment to visualize
-        segments_to_show: Number of segments to visualize
+        segment_length: Number of segments to show in each view (not character length)
+        segments_to_show: Number of different views to show
 
     Returns:
-        String with visualization
+        String with visualization showing token text separated by pipes
+
+    Examples:
+        >>> segments = [seg1, seg2, seg3, seg4, seg5]  # 5 segments
+        >>> visualize_text_segmentation(segments, 3, 2)
+        # Shows 2 views, each with up to 3 segments
+        >>> # View 1: segments 0-2, View 2: segments 2-4
     """
     if not segmentation:
         return "No segmentation available to visualize"
 
+    total_segments = len(segmentation)
     visualizations = []
 
-    # Reconstruct the full text from segmentation to calculate total length
-    full_text = ""
-    for segment in segmentation:
-        full_text += segment.token_text
-
-    # For each visualization requested
-    for i in range(segments_to_show):
-        # Calculate start position for this visualization
+    # Calculate segment boundaries for each view
+    for view_idx in range(segments_to_show):
+        # Calculate starting segment index for this view
         if segments_to_show == 1:
-            # Show from beginning if only one segment requested
-            start_pos = 0
+            start_segment = 0
         else:
-            # Distribute segments evenly across the text
-            start_pos = i * len(full_text) // segments_to_show
+            # Distribute views evenly across total segments
+            start_segment = view_idx * total_segments // segments_to_show
 
-        # Find the ending position
-        end_pos = start_pos + segment_length
+        # Calculate ending segment index (exclusive)
+        end_segment = min(start_segment + segment_length, total_segments)
 
-        # Find segments that fall within our visualization window
-        relevant_segments = []
-        current_pos = 0
+        # Get segments for this view
+        view_segments = segmentation[start_segment:end_segment]
 
-        for segment in segmentation:
-            segment_start = current_pos
-            segment_end = current_pos + len(segment.token_text)
+        # Build visualization for this view
+        view_text = f"Segmentation view {view_idx + 1} [segments {start_segment}:{end_segment}]:\n"
 
-            # Check if this segment overlaps with our visualization window
-            if segment_start < end_pos and segment_end > start_pos:
-                relevant_segments.append((segment, segment_start, segment_end))
+        # Extract token texts and join with pipes
+        token_texts = [segment.token_text for segment in view_segments]
+        segmented_text = "|".join(token_texts)
+        view_text += segmented_text + "\n\n"
 
-            current_pos = segment_end
-
-            # Stop if we've passed our window
-            if segment_start >= end_pos:
-                break
-
-        # Build the visualization
-        visualization = f"Segmentation view {i+1} [position {start_pos}:{end_pos}]:\n"
-
-        # Create the text line for this window
-        text_line = ""
-        marker_line = ""
-
-        # Start with the first character of our window
-        current_char_pos = start_pos
-
-        for segment, segment_start, segment_end in relevant_segments:
-            # Add text from this segment that falls in our window
-            text_start_in_segment = max(0, start_pos - segment_start)
-            text_end_in_segment = min(len(segment.token_text), end_pos - segment_start)
-
-            if text_end_in_segment > text_start_in_segment:
-                segment_text = segment.token_text[
-                    text_start_in_segment:text_end_in_segment
-                ]
-                text_line += segment_text
-
-                # Add markers (| at the beginning of each token)
-                if current_char_pos == max(start_pos, segment_start):
-                    marker_line += "|"
-
-                # Add spaces under the text for proper alignment
-                marker_line += " " * (
-                    len(segment_text)
-                    - (1 if current_char_pos == max(start_pos, segment_start) else 0)
-                )
-
-                current_char_pos += len(segment_text)
-
-        # Add final marker if we ended exactly at a token boundary
-        if current_char_pos < end_pos and len(text_line) < segment_length:
-            marker_line += "|"
-
-        visualization += text_line + "\n"
-        visualization += marker_line + "\n\n"
-
-        # Add token details
-        visualization += "Tokens in this segment:\n"
-        for segment, segment_start, segment_end in relevant_segments:
-            # Calculate positions relative to our visualization window
-            rel_start = max(0, segment_start - start_pos)
-            rel_end = min(segment_length, segment_end - start_pos)
-
+        # List the segments with their details
+        view_text += "Tokens in this segment:\n"
+        for segment in view_segments:
             usage_cost = segment.token_data.usage_cost
             replacement_score = segment.token_data.replacement_score
             token_type = segment.token_data.token_type.name
 
-            visualization += (
-                f"[{rel_start}:{rel_end}] '{segment.token_text}' "
+            view_text += (
+                f"[{segment.start_pos}:{segment.end_pos}] '{segment.token_text}' "
                 f"(usage_cost: {usage_cost:.4f}, replacement_score: {replacement_score:.6f}, "
                 f"type: {token_type})\n"
             )
 
-        visualizations.append(visualization)
+        visualizations.append(view_text)
 
     return "\n".join(visualizations)

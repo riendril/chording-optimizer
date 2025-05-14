@@ -210,7 +210,7 @@ debug:
   log_file: "chord_generator.log"
 
   # Whether to print detailed cost breakdowns
-  print_cost_details: false
+  print_cost_details: true
 
   # Whether to save intermediate results during processing
   save_intermediate_results: false

@@ -195,12 +195,12 @@ def select_tokens_iteratively(
             logger.warning("No more eligible tokens available")
             break
 
-        # Add to selected tokens
+        # Add to selected tokens and update values
         next_token.selected = True
-        next_token.best_current_combination = [
-            next_token.lower
-        ]  # Set its own representation
-        # TODO: LATER assign chord instead
+        next_token.subtoken_length = 1
+        # TODO: LATER assign chord and chords usage_cost instead
+        next_token.best_current_combination = [next_token.lower]
+        next_token.usage_cost = 1
         selected_tokens.append(next_token)
 
         # Log with both usage cost and replacement score
@@ -245,11 +245,11 @@ def select_tokens_iteratively(
 
     # Visualize final segmentation if enabled
     if debug_options.get("print_segmentation"):
-        visualization = visualize_text_segmentation(final_segmentation, 100, 3)
+        visualization = visualize_text_segmentation(final_segmentation, 20, 3)
         logger.info(f"Final segmentation visualization:\n{visualization}")
     else:
         # Always show at least one visualization sample of the final segmentation
-        visualization = visualize_text_segmentation(final_segmentation, 100, 1)
+        visualization = visualize_text_segmentation(final_segmentation, 20, 1)
         logger.info(f"Sample of final segmentation:\n{visualization}")
 
     # Create token collection with final tokens
