@@ -1,3 +1,44 @@
+"""
+Token selection module with iterative selection algorithm.
+
+This module processes corpus text to:
+1. Initialize a list of selected tokens (starting with single characters)
+2. Iteratively find optimal segmentation of text using currently selected tokens
+3. Generate new token candidates from the optimally segmented text
+4. Score all current tokens (usage cost and replacement score)
+5. Select next eligible token based on replacement score
+6. Output a ranked list of tokens
+"""
+
+import logging
+import os
+from collections import Counter
+from typing import Dict, Optional
+
+import tqdm
+
+from src.common.benchmarking import Benchmark, BenchmarkPhase
+from src.common.config import GeneratorConfig
+from src.common.shared_types import TokenCollection, TokenData, TokenType
+from src.token_generation.text_segmentation import (
+    find_optimal_text_segmentation_in_chunks,
+    visualize_text_segmentation,
+)
+from src.token_generation.token_extraction import (
+    extract_tokens_from_segmentation,
+    extract_tokens_from_segmentation_parallel,
+    extract_words_from_text,
+    set_word_set_for_cache,
+)
+from src.token_generation.token_scoring import (
+    calculate_replacement_score,
+    calculate_usage_cost,
+    update_token_scores,
+)
+
+logger = logging.getLogger(__name__)
+
+
 def select_tokens_iteratively(
     text: str,
     min_token_length: int,

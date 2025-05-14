@@ -56,20 +56,14 @@ class KeyPosition:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], finger_enum: type) -> "KeyPosition":
+    def from_dict(cls, data: Dict[str, Any]) -> "KeyPosition":
         """Create from dictionary after JSON deserialization"""
         return cls(
-            finger=finger_enum[data["finger"]],
+            finger=Finger[data["finger"]],
             vertical_distance_to_resting_position=data["vertical_distance"],
             horizontal_distance_to_resting_position=data["horizontal_distance"],
-            finger_to_left=(
-                finger_enum[data["finger_to_left"]] if data["finger_to_left"] else None
-            ),
-            finger_to_right=(
-                finger_enum[data["finger_to_right"]]
-                if data["finger_to_right"]
-                else None
-            ),
+            finger_to_left=Finger[data["finger_to_left"]],
+            finger_to_right=Finger[data["finger_to_right"]],
         )
 
 
@@ -78,7 +72,8 @@ class TokenData:
     """Represents preprocessed data for a token"""
 
     lower: str
-    length: int
+    character_length: int
+    subtoken_length: int
     token_type: TokenType
     text_count: int
     usage_count: int
@@ -92,12 +87,13 @@ class TokenData:
         """Convert to dictionary for JSON serialization"""
         return {
             "lower": self.lower,
-            "length": self.length,
+            "character_length": self.character_length,
+            "subtoken_length": self.subtoken_length,
             "token_type": self.token_type.name,
             "text_count": self.text_count,
             "usage_count": self.usage_count,
             "rank": self.rank,
-            "usage_count": self.usage_count,
+            "usage_cost": self.usage_cost,
             "replacement_score": self.replacement_score,
             "selected": self.selected,
             "best_current_combination": self.best_current_combination,
@@ -108,7 +104,8 @@ class TokenData:
         """Create from dictionary after JSON deserialization"""
         return cls(
             lower=data["lower"],
-            length=data["length"],
+            character_length=data["character_length"],
+            subtoken_length=data["subtoken_length"],
             token_type=TokenType[data["token_type"]],
             text_count=data["text_count"],
             usage_count=data["usage_count"],
@@ -149,10 +146,10 @@ class ContextInfo:
     def from_dict(cls, data: Dict) -> "ContextInfo":
         """Create from dictionary after deserialization"""
         return cls(
-            preceding=data.get("preceding", {}),
-            following=data.get("following", {}),
-            is_substring_of=data.get("is_substring_of", []),
-            contains_substrings=data.get("contains_substrings", []),
+            preceding=data["preceding"],
+            following=data["following"],
+            is_substring_of=data["is_substring_of"],
+            contains_substrings=data["contains_substrings"],
         )
 
 
@@ -162,8 +159,7 @@ class TokenCollection:
 
     name: str
     tokens: List[TokenData] = field(default_factory=list)
-    ordered_by_frequency: bool = False
-    source: Optional[str] = None
+    ordered_by_frequency: bool
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -171,7 +167,6 @@ class TokenCollection:
             "name": self.name,
             "tokens": [token.to_dict() for token in self.tokens],
             "orderedByFrequency": self.ordered_by_frequency,
-            "source": self.source,
         }
 
     @classmethod
@@ -179,11 +174,8 @@ class TokenCollection:
         """Create from dictionary after JSON deserialization"""
         return cls(
             name=data["name"],
-            tokens=[
-                TokenData.from_dict(token_data) for token_data in data.get("tokens", [])
-            ],
-            ordered_by_frequency=data.get("orderedByFrequency", True),
-            source=data.get("source"),
+            tokens=[TokenData.from_dict(token_data) for token_data in data["tokens"]],
+            ordered_by_frequency=data["orderedByFrequency"],
         )
 
     def save_to_file(self, file_path: Union[str, Path]) -> None:
@@ -205,37 +197,27 @@ class ChordData:
 
     letters: str
     keys: Tuple[KeyPosition, ...] = field(default_factory=tuple)
-    length: int = field(init=False)
+    character_length: int = field(init=False)
 
     def __post_init__(self):
-        self.length = len(self.letters)
+        self.character_length = len(self.letters)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
             "letters": self.letters,
             "keys": [key.to_dict() for key in self.keys],
-            "length": self.length,
+            "character_length": self.character_length,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], finger_enum: type = Finger) -> "ChordData":
+    def from_dict(cls, data: Dict[str, Any]) -> "ChordData":
         """Create from dictionary after JSON deserialization"""
         instance = cls(
             letters=data["letters"],
-            keys=tuple(
-                KeyPosition.from_dict(key_data, finger_enum)
-                for key_data in data.get("keys", [])
-            ),
+            keys=tuple(KeyPosition.from_dict(key_data) for key_data in data["keys"]),
         )
-        # Ensure length is set properly even if it was provided in the data
-        instance.length = len(instance.letters)
         return instance
-
-    @classmethod
-    def from_letters(cls, letters: str) -> "ChordData":
-        """Create from a string of letters without key positions"""
-        return cls(letters=letters)
 
 
 @dataclass
@@ -259,19 +241,14 @@ class ChordCollection:
         }
 
     @classmethod
-    def from_dict(
-        cls, data: Dict[str, Any], finger_enum: type = Finger
-    ) -> "ChordCollection":
+    def from_dict(cls, data: Dict[str, Any]) -> "ChordCollection":
         """Create from dictionary after JSON deserialization"""
         return cls(
             name=data["name"],
             min_length=data["min_length"],
             max_length=data["max_length"],
-            chords=[
-                ChordData.from_dict(chord_data, finger_enum)
-                for chord_data in data.get("chords", [])
-            ],
-            costs=data.get("costs", {}),
+            chords=[ChordData.from_dict(chord_data) for chord_data in data["chords"]],
+            costs=data["costs"],
         )
 
     def save_to_file(self, file_path: Union[str, Path]) -> None:
@@ -280,13 +257,11 @@ class ChordCollection:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
 
     @classmethod
-    def load_from_file(
-        cls, file_path: Union[str, Path], finger_enum: type = Finger
-    ) -> "ChordCollection":
+    def load_from_file(cls, file_path: Union[str, Path]) -> "ChordCollection":
         """Load chord collection from JSON file"""
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return cls.from_dict(data, finger_enum)
+        return cls.from_dict(data)
 
 
 @dataclass
@@ -295,7 +270,7 @@ class Assignment:
 
     token: TokenData
     chord: ChordData
-    score: float = 0.0
+    score: float
     metrics: Dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -308,15 +283,13 @@ class Assignment:
         }
 
     @classmethod
-    def from_dict(
-        cls, data: Dict[str, Any], finger_enum: type = Finger
-    ) -> "Assignment":
+    def from_dict(cls, data: Dict[str, Any]) -> "Assignment":
         """Create from dictionary after JSON deserialization"""
         return cls(
             token=TokenData.from_dict(data["token"]),
-            chord=ChordData.from_dict(data["chord"], finger_enum),
-            score=data.get("score", 0.0),
-            metrics=data.get("metrics", {}),
+            chord=ChordData.from_dict(data["chord"]),
+            score=data["score"],
+            metrics=data["metrics"],
         )
 
 
@@ -337,17 +310,15 @@ class AssignmentSet:
         }
 
     @classmethod
-    def from_dict(
-        cls, data: Dict[str, Any], finger_enum: type = Finger
-    ) -> "AssignmentSet":
+    def from_dict(cls, data: Dict[str, Any]) -> "AssignmentSet":
         """Create from dictionary after JSON deserialization"""
         return cls(
             name=data["name"],
             assignments=[
-                Assignment.from_dict(assignment_data, finger_enum)
-                for assignment_data in data.get("assignments", [])
+                Assignment.from_dict(assignment_data)
+                for assignment_data in data["assignments"]
             ],
-            metrics=data.get("metrics", {}),
+            metrics=data["metrics"],
         )
 
     def save_to_file(self, file_path: Union[str, Path]) -> None:
@@ -356,13 +327,11 @@ class AssignmentSet:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
 
     @classmethod
-    def load_from_file(
-        cls, file_path: Union[str, Path], finger_enum: type = Finger
-    ) -> "AssignmentSet":
+    def load_from_file(cls, file_path: Union[str, Path]) -> "AssignmentSet":
         """Load assignment set from JSON file"""
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return cls.from_dict(data, finger_enum)
+        return cls.from_dict(data)
 
 
 @dataclass
