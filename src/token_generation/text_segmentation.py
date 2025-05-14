@@ -50,13 +50,13 @@ def find_optimal_text_segmentation(
     # Bottom-up DP
     for i in range(1, n + 1):
         # Default: use previous best + single character
-        # For single characters, use their discomfort score from the token
+        # For single characters, use their usage cost from the token
         char = text[i - 1 : i].lower()
         char_token = token_dict.get(char)
 
-        # Use inverse of discomfort for the DP score (higher = better segmentation)
+        # Use inverse of usage cost for the DP score (higher = better segmentation)
         # TODO: What exactly do these numbers mean? Looks weirdly hard coded
-        best[i] = (best[i - 1][0] + 1.0 / char_token.score, i - 1)
+        best[i] = (best[i - 1][0] + 1.0 / char_token.usage_cost, i - 1)
 
         # Try all possible last tokens ending at position i
         max_token_len = min(i, max(len(t.lower) for t in selected_tokens))
@@ -66,12 +66,12 @@ def find_optimal_text_segmentation(
             candidate = text[start:i].lower()
 
             if candidate in token_dict:
-                # Use discomfort score (lower is better for segmentation)
-                token_discomfort = token_dict[candidate].score
+                # Use usage cost (lower is better for segmentation)
+                token_usage_cost = token_dict[candidate].usage_cost
 
-                # For segmentation, we want lower discomfort = better score
-                # So we use inverse of discomfort (higher = better)
-                token_value = 1.0 / max(0.1, token_discomfort)
+                # For segmentation, we want lower usage cost = better score
+                # So we use inverse of usage cost (higher = better)
+                token_value = 1.0 / max(0.1, token_usage_cost)
 
                 candidate_score = best[start][0] + token_value
                 if candidate_score > best[i][0]:
@@ -147,18 +147,16 @@ def find_optimal_text_segmentation_in_chunks(
 
 
 def visualize_text_segmentation(
-    text: str,
     segmentation: List[TextSegment],
-    segment_length: int = 100,
-    segments_to_show: int = 1,
+    segment_length: int,
+    segments_to_show: int,
 ) -> str:
-    """Visualize random segments of the text segmentation using | as separators.
+    """Visualize segments of the text segmentation using | as separators.
 
     Args:
-        text: Original text
         segmentation: List of TextSegment objects
         segment_length: Length of text segment to visualize
-        segments_to_show: Number of random segments to visualize
+        segments_to_show: Number of segments to visualize
 
     Returns:
         String with visualization
@@ -168,68 +166,98 @@ def visualize_text_segmentation(
 
     visualizations = []
 
-    # TODO: Why does this function even need the text? The segmentation should
-    # be enough, right?
-    # FIX: Current output is sth like this: "||||||||||||||||"
+    # Reconstruct the full text from segmentation to calculate total length
+    full_text = ""
+    for segment in segmentation:
+        full_text += segment.token_text
 
-    for _ in range(segments_to_show):
-        # Find a random starting point
-        max_start = max(0, len(text) - segment_length)
-        random_start = random.randint(0, max_start)
-        random_end = random_start + segment_length
+    # For each visualization requested
+    for i in range(segments_to_show):
+        # Calculate start position for this visualization
+        if segments_to_show == 1:
+            # Show from beginning if only one segment requested
+            start_pos = 0
+        else:
+            # Distribute segments evenly across the text
+            start_pos = i * len(full_text) // segments_to_show
 
-        # Find tokens that overlap with the selected segment
-        segment_tokens = []
+        # Find the ending position
+        end_pos = start_pos + segment_length
+
+        # Find segments that fall within our visualization window
+        relevant_segments = []
+        current_pos = 0
+
         for segment in segmentation:
-            if segment.start_pos < random_end and segment.end_pos > random_start:
-                segment_tokens.append(segment)
+            segment_start = current_pos
+            segment_end = current_pos + len(segment.token_text)
 
-        # Create text line with segment
-        segment_text = text[random_start:random_end]
-        visualization = f"Text segment [{random_start}:{random_end}]:\n{segment_text}\n"
+            # Check if this segment overlaps with our visualization window
+            if segment_start < end_pos and segment_end > start_pos:
+                relevant_segments.append((segment, segment_start, segment_end))
 
-        # Create marker line with | at token boundaries
-        markers = ["" for _ in range(segment_length + 1)]
+            current_pos = segment_end
 
-        # Add | at the beginning
-        markers[0] = "|"
+            # Stop if we've passed our window
+            if segment_start >= end_pos:
+                break
 
-        # Add | at token boundaries
-        for segment in segment_tokens:
-            rel_start = segment.start_pos - random_start
-            rel_end = segment.end_pos - random_start
+        # Build the visualization
+        visualization = f"Segmentation view {i+1} [position {start_pos}:{end_pos}]:\n"
 
-            if 0 <= rel_start < segment_length:
-                markers[rel_start] = "|"
-            if 0 < rel_end <= segment_length:
-                markers[rel_end] = "|"
-
-        # Build the marker line
+        # Create the text line for this window
+        text_line = ""
         marker_line = ""
-        for i, marker in enumerate(markers):
-            if marker:
-                marker_line += marker
-            else:
-                marker_line += " "
 
+        # Start with the first character of our window
+        current_char_pos = start_pos
+
+        for segment, segment_start, segment_end in relevant_segments:
+            # Add text from this segment that falls in our window
+            text_start_in_segment = max(0, start_pos - segment_start)
+            text_end_in_segment = min(len(segment.token_text), end_pos - segment_start)
+
+            if text_end_in_segment > text_start_in_segment:
+                segment_text = segment.token_text[
+                    text_start_in_segment:text_end_in_segment
+                ]
+                text_line += segment_text
+
+                # Add markers (| at the beginning of each token)
+                if current_char_pos == max(start_pos, segment_start):
+                    marker_line += "|"
+
+                # Add spaces under the text for proper alignment
+                marker_line += " " * (
+                    len(segment_text)
+                    - (1 if current_char_pos == max(start_pos, segment_start) else 0)
+                )
+
+                current_char_pos += len(segment_text)
+
+        # Add final marker if we ended exactly at a token boundary
+        if current_char_pos < end_pos and len(text_line) < segment_length:
+            marker_line += "|"
+
+        visualization += text_line + "\n"
         visualization += marker_line + "\n\n"
 
         # Add token details
         visualization += "Tokens in this segment:\n"
-        for segment in segment_tokens:
-            rel_start = max(0, segment.start_pos - random_start)
-            rel_end = min(segment_length, segment.end_pos - random_start)
+        for segment, segment_start, segment_end in relevant_segments:
+            # Calculate positions relative to our visualization window
+            rel_start = max(0, segment_start - start_pos)
+            rel_end = min(segment_length, segment_end - start_pos)
 
-            # Calculate candidate score for display
-            discomfort = segment.token_data.score
-            # FIX: Use candidate_score attribute instead of calculating here
-            candidate_score = (
-                segment.token_data.text_count / len(text) / discomfort
-                if discomfort > 0
-                else 0
+            usage_cost = segment.token_data.usage_cost
+            replacement_score = segment.token_data.replacement_score
+            token_type = segment.token_data.token_type.name
+
+            visualization += (
+                f"[{rel_start}:{rel_end}] '{segment.token_text}' "
+                f"(usage_cost: {usage_cost:.4f}, replacement_score: {replacement_score:.6f}, "
+                f"type: {token_type})\n"
             )
-
-            visualization += f"[{rel_start}:{rel_end}] '{segment.token_text}' (discomfort: {discomfort:.4f}, candidate_score: {candidate_score:.6f})\n"
 
         visualizations.append(visualization)
 

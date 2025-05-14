@@ -40,8 +40,8 @@ class KeyPosition:
     finger: "Finger"
     vertical_distance_to_resting_position: int
     horizontal_distance_to_resting_position: int
-    finger_to_left: Optional["Finger"] = None
-    finger_to_right: Optional["Finger"] = None
+    finger_to_left: Optional["Finger"]
+    finger_to_right: Optional["Finger"]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -81,7 +81,7 @@ class TokenData:
     usage_cost: float
     replacement_score: float
     selected: bool
-    best_current_combination: List[str] = field(default_factory=list)
+    best_current_combination: List[str]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -122,16 +122,16 @@ class ContextInfo:
     """Context information for tokens including relationships with other tokens"""
 
     # Tokens that commonly precede this token with frequencies
-    preceding: Dict[str, int] = field(default_factory=dict)
+    preceding: Dict[str, int]
 
     # Tokens that commonly follow this token with frequencies
-    following: Dict[str, int] = field(default_factory=dict)
+    following: Dict[str, int]
 
     # Tokens that contain this token as a substring
-    is_substring_of: List[str] = field(default_factory=list)
+    is_substring_of: List[str]
 
     # Tokens that are contained within this token
-    contains_substrings: List[str] = field(default_factory=list)
+    contains_substrings: List[str]
 
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization"""
@@ -158,7 +158,7 @@ class TokenCollection:
     """Collection of tokens with frequency information"""
 
     name: str
-    tokens: List[TokenData] = field(default_factory=list)
+    tokens: List[TokenData]
     ordered_by_frequency: bool
 
     def to_dict(self) -> Dict[str, Any]:
@@ -196,7 +196,7 @@ class ChordData:
     """Represents preprocessed data for a chord"""
 
     letters: str
-    keys: Tuple[KeyPosition, ...] = field(default_factory=tuple)
+    keys: Tuple[KeyPosition, ...]
     character_length: int = field(init=False)
 
     def __post_init__(self):
@@ -227,8 +227,8 @@ class ChordCollection:
     name: str
     min_length: int
     max_length: int
-    chords: List[ChordData] = field(default_factory=list)
-    costs: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    chords: List[ChordData]
+    costs: Dict[str, Dict[str, float]]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -271,7 +271,7 @@ class Assignment:
     token: TokenData
     chord: ChordData
     score: float
-    metrics: Dict[str, float] = field(default_factory=dict)
+    metrics: Dict[str, float]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -298,8 +298,8 @@ class AssignmentSet:
     """Represents a set of assignments between tokens and chords"""
 
     name: str
-    assignments: List[Assignment] = field(default_factory=list)
-    metrics: Dict[str, float] = field(default_factory=dict)
+    assignments: List[Assignment]
+    metrics: Dict[str, float]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""

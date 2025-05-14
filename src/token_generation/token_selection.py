@@ -130,9 +130,7 @@ def select_tokens_iteratively(
 
         # Debug: Visualize segmentation if enabled
         if debug_options.get("print_segmentation", False):
-            visualization = visualize_text_segmentation(
-                text, current_segmentation, segments_to_show=1
-            )
+            visualization = visualize_text_segmentation(current_segmentation, 100, 1)
             logger.info(
                 f"Segmentation visualization (iteration {iteration}):\n{visualization}"
             )
@@ -219,13 +217,11 @@ def select_tokens_iteratively(
 
     # Visualize final segmentation if enabled
     if debug_options.get("print_segmentation"):
-        visualization = visualize_text_segmentation(
-            text, final_segmentation, segments_to_show=3
-        )
+        visualization = visualize_text_segmentation(final_segmentation, 100, 3)
         logger.info(f"Final segmentation visualization:\n{visualization}")
     else:
         # Always show at least one visualization sample of the final segmentation
-        visualization = visualize_text_segmentation(text, final_segmentation)
+        visualization = visualize_text_segmentation(final_segmentation, 100, 1)
         logger.info(f"Sample of final segmentation:\n{visualization}")
 
     # Create token collection with final tokens
