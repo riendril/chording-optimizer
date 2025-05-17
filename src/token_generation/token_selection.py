@@ -12,7 +12,6 @@ This module processes corpus text to:
 
 import logging
 import os
-from collections import Counter
 from typing import Dict, Optional
 
 import tqdm
@@ -21,7 +20,7 @@ from src.common.benchmarking import Benchmark, BenchmarkPhase
 from src.common.config import GeneratorConfig
 from src.common.shared_types import TokenCollection, TokenData, TokenType
 from src.token_generation.text_segmentation import (
-    find_optimal_text_segmentation_in_chunks,
+    find_optimal_text_segmentation,
     visualize_text_segmentation,
 )
 from src.token_generation.token_extraction import (
@@ -33,7 +32,7 @@ from src.token_generation.token_extraction import (
 from src.token_generation.token_scoring import (
     calculate_replacement_score,
     calculate_usage_cost,
-    update_token_scores,
+    update_token_scores_and_sort,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,15 +95,9 @@ def select_tokens_iteratively(
         selected_tokens.append(token_data)
 
     # Calculate scores for all single character tokens
-    update_token_scores(
+    update_token_scores_and_sort(
         selected_tokens, text_length, selected_tokens, layout_usage_cost
     )
-
-    # Sort by replacement score and assign ranks
-    selected_tokens.sort(key=lambda t: t.replacement_score, reverse=True)
-
-    for i, token in enumerate(selected_tokens):
-        token.rank = i + 1
 
     contained_character_count = len(selected_tokens)
     logger.info(f"Initialized with {contained_character_count} single character tokens")
@@ -124,9 +117,7 @@ def select_tokens_iteratively(
         iteration += 1
 
         # Find optimal segmentation using currently selected tokens
-        current_segmentation = find_optimal_text_segmentation_in_chunks(
-            text, selected_tokens
-        )
+        current_segmentation = find_optimal_text_segmentation(text, selected_tokens)
 
         # Debug: Visualize segmentation if enabled
         if debug_options.get("print_segmentation", False):
@@ -146,18 +137,14 @@ def select_tokens_iteratively(
             )
 
         # Update scores of selected_tokens
-        update_token_scores(
+        update_token_scores_and_sort(
             selected_tokens, text_length, selected_tokens, layout_usage_cost
         )
 
         # Calculate scores for all candidates
-        update_token_scores(
+        update_token_scores_and_sort(
             current_token_candidates, text_length, selected_tokens, layout_usage_cost
         )
-
-        # Sort candidates by replacement score
-        # TODO: calculate scores, sort and assign ranks in one function!!
-        current_token_candidates.sort(key=lambda t: t.replacement_score, reverse=True)
 
         # Debug: show top candidates if enabled
         if debug_options.get("print_candidates", False):
@@ -167,9 +154,10 @@ def select_tokens_iteratively(
                 else current_token_candidates
             )
             candidate_info = "\n".join(
-                f"  {i+1}. '{c.lower}' (usage_cost: {c.usage_cost:.4f}, "
-                f"replacement_score: {c.replacement_score:.6f}, "
-                f"count: {c.text_count}, type: {c.token_type.name})"
+                f"  {i+1}. '{c.lower}' "
+                f"(replacement_score: {c.replacement_score:.6f}, "
+                f"usage_cost: {c.usage_cost:.4f}, "
+                f"usage_count: {c.usage_count}, type: {c.token_type.name})"
                 for i, c in enumerate(top_candidates)
             )
             logger.info(f"Top candidates (iteration {iteration}):\n{candidate_info}")
@@ -205,9 +193,10 @@ def select_tokens_iteratively(
 
         # Log with both usage cost and replacement score
         logger.info(
-            f"Selected token: '{next_token.lower}' (usage_cost: {next_token.usage_cost:.4f}, "
-            f"replacement_score: {next_token.replacement_score:.6f}, "
-            f"count: {next_token.text_count}, type: {next_token.token_type.name})"
+            f"Selected token: '{next_token.lower}' "
+            f"(replacement_score: {next_token.replacement_score:.6f}, "
+            f"usage_cost: {next_token.usage_cost:.4f}, "
+            f"usage_count: {next_token.usage_count}, type: {next_token.token_type.name})"
         )
 
         # Update progress
@@ -234,7 +223,6 @@ def select_tokens_iteratively(
 
     # Convert back to list and sort by replacement score
     final_tokens_list = list(all_tokens.values())
-    final_tokens_list.sort(key=lambda t: t.replacement_score, reverse=True)
 
     # Assign ranks based on sorted order
     for i, token in enumerate(final_tokens_list):
@@ -391,9 +379,9 @@ def extract_and_select_tokens_iteratively(config: GeneratorConfig) -> None:
     top_selected = (
         selected_tokens[:10] if len(selected_tokens) >= 10 else selected_tokens
     )
-    token_info = "\n".join(
-        f"  {i+1}. '{t.lower}' (usage_cost: {t.usage_cost:.4f}, count: {t.text_count}, type: {t.token_type.name})"
+    token_debug = "\n".join(
+        f"  {i+1}. '{t.lower}' (replacement_score: {t.replacement_score:.4f}, usage_cost: {t.usage_cost:.4f}, usage_count: {t.usage_count}, type: {t.token_type.name})"
         for i, t in enumerate(top_selected)
     )
-    logger.info(f"Top selected tokens:\n{token_info}")
-    logger.info("Token extraction completed successfully")
+    logger.debug(f"Top selected tokens:\n{token_debug}")
+    logger.debug("Token extraction completed successfully")

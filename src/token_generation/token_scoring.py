@@ -105,11 +105,12 @@ def calculate_replacement_score(
     selected_tokens: List[TokenData],
     layout_usage_cost: Dict[str, float],
 ) -> float:
-    """Calculate the replacement score for a token based on frequency
-    and usage cost.
+    """Calculate the replacement score for a token based on frequency in current
+    segmentation and usage cost.
 
     The replacement score represents the overall value of adding a token to the
-    selected set. Higher scores indicate more valuable tokens.
+    selected set, replacing it with a chord. Higher scores indicate more
+    valuable tokens.
 
     Args:
         token: The token to score
@@ -128,20 +129,14 @@ def calculate_replacement_score(
         >>> calculate_replacement_score(token, 100000, [], {})
         0.00003
     """
-    # Ensure usage cost is calculated if not already set
-    if token.usage_cost <= 0:
-        token.usage_cost = calculate_usage_cost(
-            token, selected_tokens, layout_usage_cost
-        )
-
     # Frequency benefit - normalized by text length
-    frequency_factor = token.text_count / text_length
+    frequency_factor = token.usage_count / text_length
 
     # Replacement score: How valuable is the replacement of this token
     return frequency_factor * token.usage_cost
 
 
-def update_token_scores(
+def update_token_scores_and_sort(
     tokens: List[TokenData],
     text_length: int,
     selected_tokens: List[TokenData],
@@ -163,6 +158,12 @@ def update_token_scores(
         token.replacement_score = calculate_replacement_score(
             token, text_length, selected_tokens, layout_usage_cost
         )
+
+    # Sort by replacement score and assign ranks
+    tokens.sort(key=lambda t: t.replacement_score, reverse=True)
+
+    for i, token in enumerate(tokens):
+        token.rank = i + 1
 
 
 def get_cache_stats():

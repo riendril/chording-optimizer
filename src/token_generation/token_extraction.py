@@ -160,6 +160,22 @@ def extract_tokens_from_segmentation(
     return token_data_list
 
 
+def process_chunk_for_parallel(args):
+    """Process a chunk of segmentation for parallel token extraction.
+
+    Args:
+        args: Tuple containing (chunk, min_token_length, max_token_length, word_set)
+
+    Returns:
+        List of extracted TokenData objects
+    """
+    chunk, min_token_length, max_token_length, word_set = args
+    # Set the word set for this worker process
+    set_word_set_for_cache(word_set)
+    # Process this chunk using the original function
+    return extract_tokens_from_segmentation(chunk, min_token_length, max_token_length)
+
+
 def extract_tokens_from_segmentation_parallel(
     segmentation: List[TextSegment],
     min_token_length: int,
@@ -197,17 +213,12 @@ def extract_tokens_from_segmentation_parallel(
         end = min(i + chunk_size + max_token_length - 1, n)
         chunks.append(segmentation[i:end])
 
-    # Process chunks in parallel with inline worker logic
-    def process_chunk(chunk):
-        # Set the word set for this worker process
-        set_word_set_for_cache(word_set)
-        # Process this chunk using the original function
-        return extract_tokens_from_segmentation(
-            chunk, min_token_length, max_token_length
-        )
+    # Prepare arguments for the parallel function
+    args = [(chunk, min_token_length, max_token_length, word_set) for chunk in chunks]
 
+    # Process chunks in parallel
     with multiprocessing.Pool() as pool:
-        results = pool.map(process_chunk, chunks)
+        results = pool.map(process_chunk_for_parallel, args)
 
     # Combine results with composition validation
     all_tokens = {}
