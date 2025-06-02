@@ -6,7 +6,7 @@
 # Current active selections with file extensions (required)
 #------------------------------------------------------------------------------
 # Layout file with extension (must exist in key_layouts_dir)
-active_layout_file: "Nordrassil_Ergonomic_full.yaml"
+active_layout_file: "Riendril-QWERTZ_Traditional_DE-ISO.yaml"
 
 # Corpus file with extension (must exist in corpuses_dir)
 active_corpus_file: "brown.txt"

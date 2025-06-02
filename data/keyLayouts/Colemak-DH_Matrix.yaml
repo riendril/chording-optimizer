@@ -1,0 +1,70 @@
+# Colemak-DH Matrix Keyboard Layout Configuration
+name: Colemak-DH_Matrix
+type: Matrix (no stagger)
+description: "Colemak-DH layout optimized for matrix keyboards with vertical columns"
+
+# Finger assignments
+fingers:
+  q: L_PINKY
+  a: L_PINKY
+  z: L_PINKY
+  w: L_RING
+  r: L_RING
+  x: L_RING
+  f: L_MIDDLE
+  s: L_MIDDLE
+  c: L_MIDDLE
+  p: L_INDEX
+  t: L_INDEX
+  d: L_INDEX
+  b: L_INDEX
+  g: L_INDEX
+  v: L_INDEX
+  j: R_INDEX
+  m: R_INDEX
+  k: R_INDEX
+  l: R_INDEX
+  n: R_INDEX
+  h: R_INDEX
+  u: R_MIDDLE
+  e: R_MIDDLE
+  y: R_RING
+  i: R_RING
+  o: R_PINKY
+
+# Key positions as [vertical_offset, horizontal_offset]
+# Vertical offset: +1 = reach up, -1 = reach down (from home row)
+# Horizontal offset: Measured as spreading/pinching of fingers relative to the
+# middle finger
+positions:
+  q: [1, 0]
+  a: [0, 0]
+  z: [-1, 0]
+  w: [1, 0]
+  r: [0, 0]
+  x: [-1, 0]
+  f: [1, 0]
+  s: [0, 0]
+  c: [-1, 0]
+  p: [1, 0]
+  t: [0, 0]
+  d: [-1, 0]
+  b: [1, 1]
+  g: [0, 1]
+  v: [-1, 1]
+  j: [1, 1]
+  m: [0, 1]
+  k: [-1, 1]
+  l: [1, 0]
+  n: [0, 0]
+  h: [-1, 0]
+  u: [1, 0]
+  e: [0, 0]
+  y: [1, 0]
+  i: [0, 0]
+  o: [0, 0]
+
+# Usage cost matrix (lower is better)
+# Sensible defaults: 1+(rank^1.3)/10 with rank of discomfort from 0 to 10
+usage_cost:
+  unknown: 3.000
