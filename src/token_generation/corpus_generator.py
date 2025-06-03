@@ -11,18 +11,16 @@ corpus for chord layout analysis, with integrated fallbacks when APIs fail.
 """
 
 import argparse
-import gzip
 import json
 import logging
 import os
 import random
 import re
-import sys
 import time
-from collections import defaultdict, deque
-from datetime import datetime, timedelta
+from collections import deque
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List
 
 import requests
 

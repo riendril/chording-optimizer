@@ -9,7 +9,7 @@ import multiprocessing
 import re
 from collections import Counter
 from functools import lru_cache
-from typing import Dict, List, Optional, Set, Tuple
+from typing import List
 
 from src.common.shared_types import TokenData, TokenType
 from src.token_generation.text_segmentation import TextSegment

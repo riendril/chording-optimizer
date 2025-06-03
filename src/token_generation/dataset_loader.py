@@ -9,10 +9,9 @@ import gzip
 import hashlib
 import json
 import logging
-import os
 import random
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional
 
 import requests
 from tqdm import tqdm

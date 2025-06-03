@@ -29,11 +29,7 @@ from src.token_generation.token_extraction import (
     extract_words_from_text,
     set_word_set_for_cache,
 )
-from src.token_generation.token_scoring import (
-    calculate_replacement_score,
-    calculate_usage_cost,
-    update_token_scores_and_sort,
-)
+from src.token_generation.token_scoring import update_token_scores_and_sort
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +219,7 @@ def select_tokens_iteratively(
         next_token.subtoken_length = 1
         # TODO: LATER assign chord and chords usage_cost instead
         next_token.best_current_combination = [next_token.lower]
-        next_token.usage_cost = 1
+        next_token.usage_cost = 2
         selected_tokens.append(next_token)
 
         # Log with both usage cost and replacement score

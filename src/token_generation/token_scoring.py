@@ -10,8 +10,7 @@ The usage cost is cached to avoid recalculation for tokens with the same composi
 """
 
 import logging
-from functools import lru_cache
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 from src.common.shared_types import TokenData
 
@@ -102,8 +101,6 @@ def calculate_usage_cost(
 def calculate_replacement_score(
     token: TokenData,
     text_length: int,
-    selected_tokens: List[TokenData],
-    layout_usage_cost: Dict[str, float],
 ) -> float:
     """Calculate the replacement score for a token based on frequency in current
     segmentation and usage cost.
@@ -115,8 +112,6 @@ def calculate_replacement_score(
     Args:
         token: The token to score
         text_length: Length of the entire text for normalization
-        selected_tokens: List of currently selected tokens (for usage cost calculation)
-        layout_usage_cost: Dict mapping characters to usage costs (required)
 
     Returns:
         Replacement score (higher is better)
@@ -126,7 +121,7 @@ def calculate_replacement_score(
         ...                   text_count=1000, usage_count=1000, rank=1,
         ...                   usage_cost=3.0, replacement_score=0.0, selected=False,
         ...                   best_current_combination=['t', 'h', 'e'])
-        >>> calculate_replacement_score(token, 100000, [], {})
+        >>> calculate_replacement_score(token, 100000)
         0.00003
     """
     # Frequency benefit - normalized by text length
@@ -155,9 +150,7 @@ def update_token_scores_and_sort(
             token, selected_tokens, layout_usage_cost
         )
         # Calculate replacement score (dynamic value)
-        token.replacement_score = calculate_replacement_score(
-            token, text_length, selected_tokens, layout_usage_cost
-        )
+        token.replacement_score = calculate_replacement_score(token, text_length)
 
     # Sort by replacement score and assign ranks
     tokens.sort(key=lambda t: t.replacement_score, reverse=True)
