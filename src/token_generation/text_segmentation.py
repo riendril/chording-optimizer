@@ -7,6 +7,7 @@ and persistent caching for improved performance.
 """
 
 import logging
+import random
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -312,12 +313,20 @@ def visualize_text_segmentation(
 
     # Calculate segment boundaries for each view
     for view_idx in range(segments_to_show):
-        # Calculate starting segment index for this view
+        # Calculate the range of segments for this view
         if segments_to_show == 1:
-            start_segment = 0
+            # For single view, use entire segmentation
+            view_start = 0
+            view_end = total_segments
         else:
             # Distribute views evenly across total segments
-            start_segment = view_idx * total_segments // segments_to_show
+            view_start = view_idx * total_segments // segments_to_show
+            view_end = (view_idx + 1) * total_segments // segments_to_show
+
+        # Pick a random starting position within this view's range
+        # Ensure we can fit segment_length segments
+        max_start = max(view_start, view_end - segment_length)
+        start_segment = random.randint(view_start, max_start) if max_start >= view_start else view_start
 
         # Calculate ending segment index (exclusive)
         end_segment = min(start_segment + segment_length, total_segments)
