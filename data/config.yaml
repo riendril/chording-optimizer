@@ -12,7 +12,7 @@ active_layout_file: "Riendril-QWERTZ_Traditional_DE-ISO.yaml"
 active_corpus_file: "brown.txt"
 
 # Tokens file with extension (must exist in tokens_dir)
-active_tokens_file: "MonkeyType_english_1k.json"
+active_tokens_file: ""
 
 #------------------------------------------------------------------------------
 # Core file paths (required)

@@ -49,6 +49,7 @@ def select_tokens_iteratively(
     debug_options: dict,
     layout_usage_cost: Dict[str, float],
     use_parallel: bool,
+    pre_selected_tokens: Optional[TokenCollection],
 ) -> TokenCollection:
     """Select tokens iteratively by finding optimal segmentation after each selection.
 
@@ -94,13 +95,44 @@ def select_tokens_iteratively(
 
         selected_tokens.append(token_data)
 
-    # Calculate scores for all single character tokens
+    # Add pre-configured tokens if provided
+    if pre_selected_tokens:
+        logger.info(f"Loading {len(pre_selected_tokens.tokens)} pre-configured tokens")
+        for token in pre_selected_tokens.tokens:
+            # Check if this token already exists (avoid duplicates)
+            if not any(existing.lower == token.lower for existing in selected_tokens):
+                # Create a copy and mark as selected
+                pre_token = TokenData(
+                    lower=token.lower,
+                    character_length=token.character_length,
+                    subtoken_length=1,  # Will be updated later
+                    token_type=token.token_type,
+                    text_count=text.lower().count(token.lower),
+                    usage_count=text.lower().count(token.lower),
+                    rank=0,
+                    usage_cost=1.0,  # Will be updated later
+                    replacement_score=0.0,
+                    selected=True,
+                    best_current_combination=[token.lower],
+                )
+                selected_tokens.append(pre_token)
+            else:
+                logger.debug(
+                    f"Pre-configured token '{token.lower}' already exists as single character"
+                )
+
+    # Calculate scores for all selected tokens
     update_token_scores_and_sort(
         selected_tokens, text_length, selected_tokens, layout_usage_cost
     )
 
-    contained_character_count = len(selected_tokens)
-    logger.info(f"Initialized with {contained_character_count} single character tokens")
+    contained_character_count = len(
+        [t for t in selected_tokens if t.token_type == TokenType.SINGLE_CHARACTER]
+    )
+    pre_configured_count = len(selected_tokens) - contained_character_count
+    logger.info(
+        f"Initialized with {contained_character_count} single character tokens and {pre_configured_count} pre-configured tokens"
+    )
 
     # Main selection loop
     progress_bar = tqdm.tqdm(
@@ -162,7 +194,10 @@ def select_tokens_iteratively(
             )
             logger.info(f"Top candidates (iteration {iteration}):\n{candidate_info}")
 
-        if len(selected_tokens) - contained_character_count >= chords_to_assign:
+        if (
+            len(selected_tokens) - contained_character_count - pre_configured_count
+            >= chords_to_assign
+        ):
             break
 
         next_token = None
@@ -206,6 +241,28 @@ def select_tokens_iteratively(
     progress_bar.close()
 
     final_segmentation = current_segmentation
+
+    # Find the lowest scoring selected token
+    lowest_selected_score = min(t.replacement_score for t in selected_tokens)
+
+    # Find unselected tokens that score higher than the lowest selected
+    recommendations = [
+        t
+        for t in current_token_candidates
+        if not t.selected and t.replacement_score > lowest_selected_score
+    ]
+
+    logger.info(
+        f"Found {len(recommendations)} unselected tokens scoring higher than lowest selected token (score: {lowest_selected_score:.6f})"
+    )
+
+    # Log top 5 recommendations
+    top_recommendations = recommendations[:5]
+    rec_info = "\n".join(
+        f"  {i+1}. '{r.lower}' (score: {r.replacement_score:.6f}, type: {r.token_type.name})"
+        for i, r in enumerate(top_recommendations)
+    )
+    logger.info(f"Top recommendations for additional learning:\n{rec_info}")
 
     # Combine all tokens into one list, avoiding duplicates
     all_tokens = {}
@@ -312,6 +369,20 @@ def extract_and_select_tokens_iteratively(config: GeneratorConfig) -> None:
     if "unknown" not in layout_usage_cost:
         raise ValueError("Layout usage cost matrix missing required 'unknown' entry")
 
+    # Load pre-configured tokens if specified
+    pre_selected_tokens = None
+    if config.active_tokens_file:
+        try:
+            tokens_path = config.paths.get_tokens_path(config.active_tokens_file)
+            pre_selected_tokens = TokenCollection.load_from_file(tokens_path)
+            logger.info(
+                f"Loaded {len(pre_selected_tokens.tokens)} pre-configured tokens from {config.active_tokens_file}"
+            )
+        except Exception as e:
+            logger.warning(
+                f"Could not load pre-configured tokens from {config.active_tokens_file}: {e}"
+            )
+
     # Start iterative token selection
     logger.info("Starting iterative token selection")
     benchmark.start_phase(BenchmarkPhase.SET_IMPROVEMENT)
@@ -330,6 +401,7 @@ def extract_and_select_tokens_iteratively(config: GeneratorConfig) -> None:
         debug_options,
         layout_usage_cost=layout_usage_cost,
         use_parallel=use_parallel,
+        pre_selected_tokens=pre_selected_tokens,
     )
 
     benchmark.end_phase()
