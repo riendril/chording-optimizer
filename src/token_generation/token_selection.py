@@ -367,16 +367,16 @@ def extract_and_select_tokens_iteratively(config: GeneratorConfig) -> None:
 
     # Load pre-configured tokens if specified
     pre_selected_tokens = None
-    if config.active_tokens_file:
+    if config.preselected_tokens_file:
         try:
-            tokens_path = config.paths.get_tokens_path(config.active_tokens_file)
+            tokens_path = config.paths.get_tokens_path(config.preselected_tokens_file)
             pre_selected_tokens = TokenCollection.load_from_file(tokens_path)
             logger.info(
-                f"Loaded {len(pre_selected_tokens.tokens)} pre-configured tokens from {config.active_tokens_file}"
+                f"Loaded {len(pre_selected_tokens.tokens)} pre-configured tokens from {config.preselected_tokens_file}"
             )
         except Exception as e:
             logger.warning(
-                f"Could not load pre-configured tokens from {config.active_tokens_file}: {e}"
+                f"Could not load pre-configured tokens from {config.preselected_tokens_file}: {e}"
             )
 
     # Start iterative token selection

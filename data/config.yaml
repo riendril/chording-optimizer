@@ -3,7 +3,7 @@
 ################################################################################
 
 #------------------------------------------------------------------------------
-# Current active selections with file extensions (required)
+# Current active selections
 #------------------------------------------------------------------------------
 # Layout file with extension (must exist in key_layouts_dir)
 active_layout_file: "Riendril-QWERTZ_Traditional_DE-ISO.yaml"
@@ -11,8 +11,8 @@ active_layout_file: "Riendril-QWERTZ_Traditional_DE-ISO.yaml"
 # Corpus file with extension (must exist in corpuses_dir)
 active_corpus_file: "brown.txt"
 
-# Tokens file with extension (must exist in tokens_dir)
-active_tokens_file: ""
+# Optional: Preselected tokens file (if provided, must exist in tokens_dir)
+preselected_tokens_file: ""
 
 #------------------------------------------------------------------------------
 # Core file paths (required)

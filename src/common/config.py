@@ -237,7 +237,7 @@ class GeneratorConfig:
     # Current active settings - these are explicitly required with file extensions
     active_layout_file: str
     active_corpus_file: str
-    active_tokens_file: str
+    preselected_tokens_file: str
 
     # Shortcut properties
     @property
@@ -282,7 +282,7 @@ class GeneratorConfig:
         required_sections = [
             "active_layout_file",
             "active_corpus_file",
-            "active_tokens_file",
+            "preselected_tokens_file",
             "paths",
             "general",
             "debug",
@@ -443,7 +443,7 @@ class GeneratorConfig:
         # Get active settings with file extensions
         active_layout_file = data["active_layout_file"]
         active_corpus_file = data["active_corpus_file"]
-        active_tokens_file = data["active_tokens_file"]
+        preselected_tokens_file = data["preselected_tokens_file"]
 
         # Build the complete config
         return cls(
@@ -460,7 +460,7 @@ class GeneratorConfig:
             chord_assignment=chord_assignment,
             active_layout_file=active_layout_file,
             active_corpus_file=active_corpus_file,
-            active_tokens_file=active_tokens_file,
+            preselected_tokens_file=preselected_tokens_file,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -469,7 +469,7 @@ class GeneratorConfig:
         result = {
             "active_layout_file": self.active_layout_file,
             "active_corpus_file": self.active_corpus_file,
-            "active_tokens_file": self.active_tokens_file,
+            "preselected_tokens_file": self.preselected_tokens_file,
             "paths": {
                 "base_dir": str(self.paths.base_dir),
                 "data_dir": str(self.paths.data_dir),
@@ -675,6 +675,6 @@ class GeneratorConfig:
             raise ValueError(f"Invalid active_corpus_file: {e}")
 
         try:
-            self.paths.get_tokens_path(self.active_tokens_file)
+            self.paths.get_tokens_path(self.preselected_tokens_file)
         except Exception as e:
-            raise ValueError(f"Invalid active_tokens_file: {e}")
+            raise ValueError(f"Invalid preselected_tokens_file: {e}")
