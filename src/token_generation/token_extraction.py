@@ -153,6 +153,7 @@ def extract_tokens_from_segmentation(
             replacement_score=0.0,  # Will be calculated later
             selected=False,
             best_current_combination=token_compositions.get(token_text, [token_text]),
+            adjacent_tokens=None,
         )
 
         token_data_list.append(token_data)

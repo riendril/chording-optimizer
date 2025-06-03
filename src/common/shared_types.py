@@ -82,6 +82,7 @@ class TokenData:
     replacement_score: float
     selected: bool
     best_current_combination: List[str]
+    adjacent_tokens: Optional[Dict[str, Dict[str, int]]]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -97,6 +98,7 @@ class TokenData:
             "replacement_score": self.replacement_score,
             "selected": self.selected,
             "best_current_combination": self.best_current_combination,
+            "adjacent_tokens": self.adjacent_tokens,
         }
 
     @classmethod
@@ -114,42 +116,7 @@ class TokenData:
             replacement_score=data["replacement_score"],
             selected=data["selected"],
             best_current_combination=data["best_current_combination"],
-        )
-
-
-@dataclass
-class ContextInfo:
-    """Context information for tokens including relationships with other tokens"""
-
-    # Tokens that commonly precede this token with frequencies
-    preceding: Dict[str, int]
-
-    # Tokens that commonly follow this token with frequencies
-    following: Dict[str, int]
-
-    # Tokens that contain this token as a substring
-    is_substring_of: List[str]
-
-    # Tokens that are contained within this token
-    contains_substrings: List[str]
-
-    def to_dict(self) -> Dict:
-        """Convert to dictionary for serialization"""
-        return {
-            "preceding": self.preceding,
-            "following": self.following,
-            "is_substring_of": self.is_substring_of,
-            "contains_substrings": self.contains_substrings,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict) -> "ContextInfo":
-        """Create from dictionary after deserialization"""
-        return cls(
-            preceding=data["preceding"],
-            following=data["following"],
-            is_substring_of=data["is_substring_of"],
-            contains_substrings=data["contains_substrings"],
+            adjacent_tokens=data["adjacent_tokens"],
         )
 
 

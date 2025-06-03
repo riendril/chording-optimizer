@@ -23,6 +23,7 @@ from src.token_generation.text_segmentation import (
     find_optimal_text_segmentation,
     visualize_text_segmentation,
 )
+from src.token_generation.token_context import add_adjacency_context_to_tokens
 from src.token_generation.token_extraction import (
     extract_tokens_from_segmentation,
     extract_tokens_from_segmentation_parallel,
@@ -87,6 +88,7 @@ def select_tokens_iteratively(
             replacement_score=0.0,
             selected=True,
             best_current_combination=[char],
+            adjacent_tokens=None,
         )
 
         selected_tokens.append(token_data)
@@ -237,6 +239,10 @@ def select_tokens_iteratively(
     progress_bar.close()
 
     final_segmentation = current_segmentation
+
+    # Add adjacency context to selected tokens
+    logger.info("Adding adjacency context to selected tokens...")
+    add_adjacency_context_to_tokens(selected_tokens, final_segmentation)
 
     # Find the lowest scoring selected token
     lowest_selected_score = min(t.replacement_score for t in selected_tokens)
