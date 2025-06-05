@@ -70,7 +70,7 @@ chord_generation:
   min_letter_count: 2
 
   # Maximum number of letters per chord
-  max_letter_count: 6
+  max_letter_count: 5
 
   # Whether to allow non-adjacent keys in chords
   allow_non_adjacent_keys: true

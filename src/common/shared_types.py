@@ -162,29 +162,48 @@ class TokenCollection:
 class ChordData:
     """Represents preprocessed data for a chord"""
 
-    letters: str
-    keys: Tuple[KeyPosition, ...]
-    character_length: int = field(init=False)
+    keys: Tuple[Tuple[KeyPosition, str]]
+    key_count: int
+    usage_cost: float
 
     def __post_init__(self):
-        self.character_length = len(self.letters)
+        self.key_count = len(self.keys)
+
+    @property
+    def letters(self) -> str:
+        """Get the letters from the chord keys in order"""
+        return "".join(char for _, char in self.keys)
+
+    @property
+    def character_length(self) -> int:
+        """Get the character length (for backward compatibility)"""
+        return self.key_count
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
-            "letters": self.letters,
-            "keys": [key.to_dict() for key in self.keys],
-            "character_length": self.character_length,
+            "keys": [
+                {"key_position": key_pos.to_dict(), "character": char}
+                for key_pos, char in self.keys
+            ],
+            "key_count": self.key_count,
+            "usage_cost": self.usage_cost,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ChordData":
         """Create from dictionary after JSON deserialization"""
-        instance = cls(
-            letters=data["letters"],
-            keys=tuple(KeyPosition.from_dict(key_data) for key_data in data["keys"]),
+        return cls(
+            keys=tuple(
+                (
+                    KeyPosition.from_dict(key_tuple["key_position"]),
+                    key_tuple["character"],
+                )
+                for key_tuple in data["keys"]
+            ),
+            key_count=data["key_count"],
+            usage_cost=data["usage_cost"],
         )
-        return instance
 
 
 @dataclass
@@ -195,7 +214,6 @@ class ChordCollection:
     min_length: int
     max_length: int
     chords: List[ChordData]
-    costs: Dict[str, Dict[str, float]]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -204,7 +222,6 @@ class ChordCollection:
             "min_length": self.min_length,
             "max_length": self.max_length,
             "chords": [chord.to_dict() for chord in self.chords],
-            "costs": self.costs,
         }
 
     @classmethod
@@ -215,7 +232,6 @@ class ChordCollection:
             min_length=data["min_length"],
             max_length=data["max_length"],
             chords=[ChordData.from_dict(chord_data) for chord_data in data["chords"]],
-            costs=data["costs"],
         )
 
     def save_to_file(self, file_path: Union[str, Path]) -> None:
