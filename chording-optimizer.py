@@ -8,6 +8,7 @@ building are working for now).
 import argparse
 import logging
 
+from src.assignment.chord_assignment import assign_tokens_to_chords
 from src.chord_generation.chord_generator import generate_chords
 from src.common.config import GeneratorConfig
 from src.token_generation.corpus_generator import generate_corpus
@@ -34,8 +35,7 @@ def run_pipeline_stage(config: GeneratorConfig, stage: str):
         generate_chords(config)
     elif stage == "assignment":
         logger.info("Optimizing token-chord assignments...")
-        # Implementation for assignment will go here
-        pass
+        assign_tokens_to_chords(config)
     elif stage == "analysis":
         logger.info("Analyzing assignments...")
         # Implementation for analysis will go here

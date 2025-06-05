@@ -62,8 +62,8 @@ class KeyPosition:
             finger=Finger[data["finger"]],
             vertical_distance_to_resting_position=data["vertical_distance"],
             horizontal_distance_to_resting_position=data["horizontal_distance"],
-            finger_to_left=Finger[data["finger_to_left"]],
-            finger_to_right=Finger[data["finger_to_right"]],
+            finger_to_left=Finger[data["finger_to_left"]] if data["finger_to_left"] is not None else None,
+            finger_to_right=Finger[data["finger_to_right"]] if data["finger_to_right"] is not None else None,
         )
 
 
@@ -253,15 +253,13 @@ class Assignment:
 
     token: TokenData
     chord: ChordData
-    score: float
-    metrics: Dict[str, float]
+    metrics: Optional[Dict[str, float]]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
             "token": self.token.to_dict(),
             "chord": self.chord.to_dict(),
-            "score": self.score,
             "metrics": self.metrics,
         }
 
@@ -271,7 +269,6 @@ class Assignment:
         return cls(
             token=TokenData.from_dict(data["token"]),
             chord=ChordData.from_dict(data["chord"]),
-            score=data["score"],
             metrics=data["metrics"],
         )
 
@@ -282,7 +279,7 @@ class AssignmentSet:
 
     name: str
     assignments: List[Assignment]
-    metrics: Dict[str, float]
+    metrics: Optional[Dict[str, float]]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -324,6 +321,35 @@ class SetData:
     assignment_set: AssignmentSet
     chord_collection: ChordCollection
     token_collection: TokenCollection
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            "assignment_set": self.assignment_set.to_dict(),
+            "chord_collection": self.chord_collection.to_dict(),
+            "token_collection": self.token_collection.to_dict(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SetData":
+        """Create from dictionary after JSON deserialization"""
+        return cls(
+            assignment_set=AssignmentSet.from_dict(data["assignment_set"]),
+            chord_collection=ChordCollection.from_dict(data["chord_collection"]),
+            token_collection=TokenCollection.from_dict(data["token_collection"]),
+        )
+
+    def save_to_file(self, file_path: Union[str, Path]) -> None:
+        """Save SetData to JSON file"""
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+
+    @classmethod
+    def load_from_file(cls, file_path: Union[str, Path]) -> "SetData":
+        """Load SetData from JSON file"""
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return cls.from_dict(data)
 
 
 class StandaloneMetricType(Enum):
