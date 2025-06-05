@@ -115,14 +115,8 @@ def main():
     if args.stages:
         stages = args.stages
     else:
-        # Default to running all
-        stages = [
-            "corpus_generation",
-            "token_extraction",
-            "chords_generation",
-            "assignment",
-            "analysis",
-        ]
+        # Use default stages from configuration
+        stages = config.general.default_stages
 
     logger.info(f"Running pipeline stages: {', '.join(stages)}")
 

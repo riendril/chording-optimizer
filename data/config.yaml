@@ -43,6 +43,13 @@ general:
   # Number of chords to assign
   chords_to_assign: 100 #  Default: one tenth of top tokens
 
+  # Default stages to run when no --stages argument is provided
+  # Available stages: corpus_generation, token_extraction, chords_generation, assignment, analysis
+  default_stages:
+    - "token_extraction"
+    - "chords_generation"
+    - "assignment"
+
 #------------------------------------------------------------------------------
 # Token analysis configuration
 #------------------------------------------------------------------------------

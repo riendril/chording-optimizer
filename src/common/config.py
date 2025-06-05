@@ -12,7 +12,7 @@ import os
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import yaml
 
@@ -105,6 +105,9 @@ class GeneralSettings:
 
     # Assignment settings
     chords_to_assign: int
+    
+    # Pipeline execution settings
+    default_stages: List[str]
 
 
 @dataclass
@@ -334,6 +337,7 @@ class GeneratorConfig:
         general = GeneralSettings(
             use_parallel_processing=general_data["use_parallel_processing"],
             chords_to_assign=general_data["chords_to_assign"],
+            default_stages=general_data["default_stages"],
         )
 
         # Parse debug options
@@ -484,6 +488,7 @@ class GeneratorConfig:
             "general": {
                 "use_parallel_processing": self.general.use_parallel_processing,
                 "chords_to_assign": self.general.chords_to_assign,
+                "default_stages": self.general.default_stages,
             },
             "debug": {
                 "enabled": self.debug.enabled,
