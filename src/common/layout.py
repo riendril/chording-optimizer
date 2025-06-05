@@ -108,26 +108,25 @@ def create_key_positions(layout_data: Dict) -> Dict[str, KeyPosition]:
         finger_to_left = None
         finger_to_right = None
 
-        # Check adjacent keys in the same row to infer finger relationships
-        for other_key, other_pos in positions.items():
-            other_row, other_col = other_pos
-            other_finger_name = fingers.get(other_key)
+        # Define finger order from left to right
+        finger_order = [
+            Finger.L_PINKY, Finger.L_RING, Finger.L_MIDDLE, Finger.L_INDEX, Finger.L_THUMB,
+            Finger.R_THUMB, Finger.R_INDEX, Finger.R_MIDDLE, Finger.R_RING, Finger.R_PINKY
+        ]
 
-            if other_finger_name and other_row == row:
-                if other_col == col - 1:  # Key to the left
-                    try:
-                        finger_to_left = Finger[other_finger_name]
-                    except KeyError:
-                        logger.warning(
-                            f"Invalid finger name '{other_finger_name}' for adjacent key"
-                        )
-                elif other_col == col + 1:  # Key to the right
-                    try:
-                        finger_to_right = Finger[other_finger_name]
-                    except KeyError:
-                        logger.warning(
-                            f"Invalid finger name '{other_finger_name}' for adjacent key"
-                        )
+        try:
+            current_finger_index = finger_order.index(finger)
+            
+            # Get finger to the left
+            if current_finger_index > 0:
+                finger_to_left = finger_order[current_finger_index - 1]
+            
+            # Get finger to the right  
+            if current_finger_index < len(finger_order) - 1:
+                finger_to_right = finger_order[current_finger_index + 1]
+                
+        except ValueError:
+            logger.warning(f"Finger {finger} not found in finger order")
 
         # Create KeyPosition object
         key_positions[key] = KeyPosition(
